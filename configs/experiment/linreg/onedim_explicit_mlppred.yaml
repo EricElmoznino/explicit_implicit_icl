@@ -1,0 +1,41 @@
+name: linreg-onedim
+
+task:
+  _target_: tasks.linear_regression.LinearRegressionICL
+  lr: 1e-4
+  model:
+    _target_: models.explicit.ExplicitModelWith
+    context_model:
+      _target_: models.explicit.TransformerContext
+      x_dim: 1
+      y_dim: 1
+      n_features: 128
+      n_heads: 2
+      n_hidden: 256
+      n_layers: 4
+    prediction_model:
+      _target_: models.explicit.MLPPrediction
+      x_dim: 1
+      y_dim: 1
+      z_dim: ${..context_model.n_features}
+      hidden_dim: 410
+
+data:
+  _target_: data.finite_linear.FiniteLinearDataModule
+  x_dim: 1
+  y_dim: 1
+  min_context: 3
+  max_context: 20
+  batch_size: 128
+  train_size: 128
+  val_size: 128
+  noise: 0.0
+
+trainer:
+  max_epochs: 1000
+
+callbacks:
+  - _target_: lightning.pytorch.callbacks.EarlyStopping
+    monitor: "val/MSE"
+    patience: 100
+    mode: min

@@ -1,0 +1,16 @@
+defaults:
+  - _self_
+  - experiment: null
+  - hydra: default
+
+wandb_account: null
+save_dir: "logs/"
+seed: 27
+
+logger:
+  _target_: lightning.pytorch.loggers.WandbLogger
+  entity: ${wandb_account}
+  name: ${now:%Y-%m-%d}_${now:%H-%M-%S}
+  project: "Explicit-Implicit_${experiment.name}"
+  save_dir: ${save_dir}
+  offline: False
