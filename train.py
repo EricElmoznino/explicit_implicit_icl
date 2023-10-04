@@ -18,6 +18,7 @@ def train(cfg):
     trainer = Trainer(
         logger=logger,
         callbacks=callbacks,
+        enable_checkpointing=False,
         **cfg.experiment.trainer,
     )
     trainer.fit(model=task, datamodule=datamodule)
