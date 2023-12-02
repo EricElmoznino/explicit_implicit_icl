@@ -180,7 +180,7 @@ class MLPPrediction(nn.Module):
         return y_q
 
 
-class AffinePrediction(nn.Module):
+class LinRegPrediction(nn.Module):
     def __init__(self, x_dim, y_dim, z_dim):
         super().__init__()
         self.x_dim = x_dim
@@ -198,4 +198,24 @@ class AffinePrediction(nn.Module):
             w = z
         w = w.reshape(-1, self.x_dim + 1, self.y_dim)
         y_q = (x_q.unsqueeze(1) @ w).squeeze(1)
+        return y_q
+
+
+class PolyRegPrediction(nn.Module):
+    def __init__(self, order, z_dim):
+        super().__init__()
+        self.order = order
+        if z_dim != order + 1:
+            self.w_encoder = nn.Linear(z_dim, order + 1)
+        else:
+            self.w_encoder = None
+
+    def forward(self, z, x_q):
+        x_q = torch.stack([x_q**i for i in range(self.order + 1)], dim=-1)
+        if self.w_encoder:
+            w = self.w_encoder(z)
+        else:
+            w = z
+        w = w.unsqueeze(-1)
+        y_q = torch.bmm(x_q, w).squeeze(1)
         return y_q

@@ -6,10 +6,11 @@ from models.explicit import ExplicitModel, ExplicitModelWith, TransformerContext
 from tasks.utils import fig2img
 
 
-class LinearRegressionICL(LightningModule):
+class PolynomialRegressionICL(LightningModule):
     def __init__(
         self,
         model: ImplicitModel | ExplicitModel,
+        order: int,
         lr: float = 1e-4,
     ):
         super().__init__()
@@ -19,8 +20,7 @@ class LinearRegressionICL(LightningModule):
         if isinstance(model, ExplicitModelWith):
             if isinstance(model.context_model, TransformerContext):
                 self.w_predictor = torch.nn.Linear(
-                    model.context_model.n_features,
-                    (model.context_model.x_dim + 1) * model.context_model.y_dim,
+                    model.context_model.n_features, order + 1
                 )
             else:
                 raise ValueError(
@@ -34,7 +34,7 @@ class LinearRegressionICL(LightningModule):
         y_q_pred, z = self.model(x_c, y_c, x_q)
         y_q_loss = torch.nn.functional.mse_loss(y_q_pred, y_q)
         if z is not None:
-            w_pred = self.w_predictor(z.detach()).view(*w.shape)
+            w_pred = self.w_predictor(z.detach())
             w_loss = torch.nn.functional.mse_loss(w_pred, w)
             loss = y_q_loss + w_loss
             self.log("train/w_MSE", w_loss, on_step=False, on_epoch=True)
@@ -48,61 +48,44 @@ class LinearRegressionICL(LightningModule):
         y_q_pred, z = self.model(x_c, y_c, x_q)
         y_q_loss = torch.nn.functional.mse_loss(y_q_pred, y_q)
         if z is not None:
-            w_pred = self.w_predictor(z).view(*w.shape)
+            w_pred = self.w_predictor(z)
             w_loss = torch.nn.functional.mse_loss(w_pred, w)
             self.log("val/w_loss", w_loss, on_step=False, on_epoch=True)
         self.log("val/MSE", y_q_loss, on_step=False, on_epoch=True)
 
     def on_train_epoch_start(self):
-        if self.trainer.current_epoch % 10 == 0:
+        if self.trainer.current_epoch % 10 == 0 and self.logger is not None:
             self.eval()
-            self.plot_model("train")
-            self.plot_model("val")
+            self.plot_model()
             self.train()
 
     @torch.inference_mode()
-    def plot_model(self, stage, n_examples=4):
-        if isinstance(self.model, ImplicitModel):
-            x_dim, y_dim = self.model.x_dim, self.model.y_dim
-        elif isinstance(self.model, ExplicitModelWith):
-            x_dim, y_dim = (
-                self.model.context_model.x_dim,
-                self.model.context_model.y_dim,
-            )
-        if x_dim > 1 or y_dim > 1 or self.logger is None:
-            return
-        if stage == "train":
-            dataset = self.trainer.datamodule.train_data
-        elif stage == "val":
-            dataset = self.trainer.datamodule.val_data
-        else:
-            raise ValueError(f"Invalid dataset: {dataset}")
-
+    def plot_model(self, n_examples=4):
+        dataset = self.trainer.datamodule.train_data
         (x_c, y_c), _, w = dataset.get_batch(
             n_context=dataset.max_context, indices=range(n_examples)
         )
-        x_c, y_c, w = x_c.to(self.device), y_c.to(self.device), w.to(self.device)
+        x_c, y_c = x_c.to(self.device), y_c.to(self.device)
         ypred = []
-        x_qs = torch.linspace(-1, 1, 50)
-        for x_q in x_qs:
+        x = torch.linspace(-4, 4, 100)
+        y = dataset.function(x.unsqueeze(0).expand(n_examples, -1), w)
+        for x_q in x:
             x_q = x_q * torch.ones(n_examples, 1, device=self.device)
             y_q_pred, _ = self.model(x_c, y_c, x_q)
             ypred.append(y_q_pred.squeeze(-1))
-        ypred = torch.stack(ypred, dim=1)
-
-        x = x_qs.numpy()
-        ypred = ypred.cpu().numpy()
-        w = w.cpu().numpy()[..., -1]
+        ypred = torch.stack(ypred, dim=1).cpu()
+        x_c, y_c = x_c.cpu(), y_c.cpu()
 
         fig, axs = plt.subplots(1, n_examples, figsize=(4 * n_examples, 4))
         for i, ax in enumerate(axs):
-            ax.plot([-1, 1], [-w[i, 0] + w[i, 1], w[i, 0] + w[i, 1]], label="True")
+            ax.plot(x, y[i], label="True")
             ax.plot(x, ypred[i], label="Model")
-            ax.set(xlabel="x", ylabel="y", ylim=(-2, 2))
+            ax.scatter(x_c[i], y_c[i])
+            ax.set(xlabel="x", ylabel="y")
             ax.legend(loc="upper left")
         fig.tight_layout()
 
-        self.logger.log_image(f"examples/{stage}", [fig2img(fig)])
+        self.logger.log_image(f"examples", [fig2img(fig)])
 
     def configure_optimizers(self):
         param_groups = [{"params": self.model.parameters()}]

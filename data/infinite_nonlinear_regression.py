@@ -9,10 +9,12 @@ from data.utils import BatchedLinear
 warnings.filterwarnings("ignore", message=".*does not have many workers.*")
 warnings.filterwarnings("ignore", message=".*`IterableDataset` has `__len__` defined.*")
 
-def init_weights(m, std=1.):
+
+def init_weights(m, std=1.0):
     if isinstance(m, BatchedLinear):
         torch.nn.init.normal_(m.weight, std=std)
         torch.nn.init.normal_(m.bias, std=std)
+
 
 class InfiniteNonlinearRegressionDataModule(LightningDataModule):
     def __init__(
@@ -64,6 +66,7 @@ class InfiniteNonlinearRegressionDataModule(LightningDataModule):
     def val_dataloader(self):
         return DataLoader(self.val_data, batch_size=None)
 
+
 class InfiniteNonlinear(IterDataPipe):
     def __init__(
         self,
@@ -87,6 +90,7 @@ class InfiniteNonlinear(IterDataPipe):
         self.hidden_dim = hidden_dim
         self.layers = layers
         self.batch_size = batch_size
+        self.data_size = data_size
         self.noise = noise
 
         if activation == "relu":
@@ -96,16 +100,21 @@ class InfiniteNonlinear(IterDataPipe):
         else:
             raise ValueError(f"Unknown activation: {activation}")
 
-        self.x_dist = torch.distributions.normal.Normal(0., 1.)
+        self.x_dist = torch.distributions.normal.Normal(0.0, 1.0)
 
         self.model = self.get_model()
         if torch.cuda.is_available():
             self.model = self.model.cuda()
 
     def get_model(self):
-        layers = [BatchedLinear(self.x_dim, self.hidden_dim, self.batch_size), self.activation]
+        layers = [
+            BatchedLinear(self.x_dim, self.hidden_dim, self.batch_size),
+            self.activation,
+        ]
         for _ in range(self.layers - 1):
-            layers.append(BatchedLinear(self.hidden_dim, self.hidden_dim, self.batch_size))
+            layers.append(
+                BatchedLinear(self.hidden_dim, self.hidden_dim, self.batch_size)
+            )
             layers.append(self.activation)
         layers.append(BatchedLinear(self.hidden_dim, self.y_dim, self.batch_size))
         model = torch.nn.Sequential(*layers)
@@ -128,7 +137,7 @@ class InfiniteNonlinear(IterDataPipe):
     def get_batch(self, n_context=None, indices=None):
         if n_context is None:
             n_context = np.random.randint(self.min_context, self.max_context + 1)
-        
+
         self.model.apply(init_weights)
         w = self.get_parameters().view(self.batch_size, -1)
 
@@ -136,9 +145,9 @@ class InfiniteNonlinear(IterDataPipe):
         if torch.cuda.is_available():
             x = x.cuda()
         y = self.function(x)
-        y = y + self.noise * torch.randn_like(y)
+        y_noise = y + self.noise * torch.randn_like(y)
 
-        x_c, y_c = x[:, :n_context], y[:, :n_context]
+        x_c, y_c = x[:, :n_context], y_noise[:, :n_context]
         x_q, y_q = x[:, n_context], y[:, n_context]
         return (x_c, y_c), (x_q, y_q), w
 

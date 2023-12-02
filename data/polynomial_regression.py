@@ -8,39 +8,40 @@ import warnings
 warnings.filterwarnings("ignore", message=".*does not have many workers.*")
 warnings.filterwarnings("ignore", message=".*`IterableDataset` has `__len__` defined.*")
 
-class InfiniteLinearRegressionDataModule(LightningDataModule):
+
+class PolynomialRegressionDataModule(LightningDataModule):
     def __init__(
         self,
-        x_dim: int,
-        y_dim: int,
+        order: int,
         min_context: int,
         max_context: int,
         batch_size: int = 128,
         train_size: int = 10000,
         val_size: int = 1000,
         noise: float = 0.5,
+        ood: bool = True,
     ):
         super().__init__()
         self.save_hyperparameters()
 
     def setup(self, stage=None):
-        self.train_data = InfiniteLinear(
-            x_dim=self.hparams.x_dim,
-            y_dim=self.hparams.y_dim,
+        self.train_data = PolynomialRegression(
+            order=self.hparams.order,
             min_context=self.hparams.min_context,
             max_context=self.hparams.max_context,
             batch_size=self.hparams.batch_size,
             data_size=self.hparams.train_size,
             noise=self.hparams.noise,
+            ood=False,
         )
-        self.val_data = InfiniteLinear(
-            x_dim=self.hparams.x_dim,
-            y_dim=self.hparams.y_dim,
+        self.val_data = PolynomialRegression(
+            order=self.hparams.order,
             min_context=self.hparams.min_context,
             max_context=self.hparams.max_context,
             batch_size=self.hparams.batch_size,
             data_size=self.hparams.val_size,
             noise=self.hparams.noise,
+            ood=self.hparams.ood,
         )
 
     def train_dataloader(self):
@@ -49,56 +50,76 @@ class InfiniteLinearRegressionDataModule(LightningDataModule):
     def val_dataloader(self):
         return DataLoader(self.val_data, batch_size=None)
 
-class InfiniteLinear(IterDataPipe):
+
+class PolynomialRegression(IterDataPipe):
     def __init__(
         self,
         data_size: int,
-        x_dim: int,
-        y_dim: int,
+        order: int,
         min_context: int,
         max_context: int,
         batch_size: int = 128,
         noise: float = 0.5,
+        ood: bool = False,
     ) -> None:
         super().__init__()
 
-        self.x_dim = x_dim
-        self.y_dim = y_dim
+        self.order = order
         self.min_context = min_context
         self.max_context = max_context
         self.batch_size = batch_size
+        self.data_size = data_size
         self.noise = noise
-        self.x_dist = torch.distributions.normal.Normal(0., 1.)
-        self.w_dist = torch.distributions.normal.Normal(0., 1.)
+        self.ood = ood
+
+        std = torch.linspace(1, 1 / order**2, order)
+        std = torch.cat([0.1 * torch.ones(1), std])  # Smaller y-intercepts
+        self.w_dist = torch.distributions.normal.Normal(torch.zeros(order + 1), std)
+        self.ws_fixed = self.w_dist.rsample((100,))  # For visualization purposes
+
+    def sample_x(self, n_samples, n_context):
+        x_c = torch.randn(n_samples, n_context)
+        if self.ood:
+            x_q_mean = 3 if np.random.random() > 0.5 else -3
+            x_q = x_q_mean + torch.randn(n_samples) * 0.1
+        else:
+            x_q = x_c[:, 0] + torch.randn(n_samples) * 0.1
+        return x_c, x_q
 
     @torch.inference_mode()
     def function(self, x, w):
-        # x: (bsz, n_samples, x_dim)
-        # w: (bsz, x_dim + 1, y_dim)
-        x = torch.cat([x, torch.ones_like(x[:, :, :1])], dim=-1)
-        y = torch.bmm(x, w)
+        # x: (bsz, n_samples) or (bsz,)
+        # w: (bsz, order + 1)
+        x = torch.stack([x**i for i in range(self.order + 1)], dim=-1)
+        if x.ndim == 2:
+            x = x.unsqueeze(1)
+        w = w.unsqueeze(-1)
+        y = torch.bmm(x, w).squeeze(-1)
+        if y.shape[-1] == 1:
+            y = y.squeeze(-1)
         return y
 
     def get_batch(self, n_context=None, indices=None):
         if n_context is None:
             n_context = np.random.randint(self.min_context, self.max_context + 1)
-        
-        w = self.w_dist.rsample((self.batch_size, self.x_dim + 1, self.y_dim))
-        x = self.x_dist.rsample((self.batch_size, n_context + 1, self.x_dim))
-        y = self.function(x, w)
-        y_noise = y + self.noise * torch.randn_like(y)
-
-        w = self.ws[indices]
-        x = self.x_dist.sample((w.shape[0], n_context + 1, self.x_dim))
-        y = self.function(x, w)
-        y_noise = y + self.noise * torch.randn_like(y)
-        x_c, y_c = x[:, :n_context], y_noise[:, :n_context]
-        x_q, y_q = x[:, n_context], y[:, n_context]
+        if indices is None:
+            w = self.w_dist.rsample((self.batch_size,))
+        else:
+            w = self.ws_fixed[indices]
+        x_c, x_q = self.sample_x(w.shape[0], n_context)
+        y_c, y_q = self.function(x_c, w), self.function(x_q, w)
+        y_c = y_c + self.noise * torch.randn_like(y_c)
+        x_c, y_c, x_q, y_q = (
+            x_c.unsqueeze(-1),
+            y_c.unsqueeze(-1),
+            x_q.unsqueeze(-1),
+            y_q.unsqueeze(-1),
+        )
         return (x_c, y_c), (x_q, y_q), w
 
-    def __len__(self) -> int:
+    def __len__(self):
         return self.data_size // self.batch_size
 
-    def __iter__(self) -> torch.Tensor:
+    def __iter__(self):
         for _ in range(len(self)):
             yield self.get_batch()

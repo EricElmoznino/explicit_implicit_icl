@@ -8,6 +8,7 @@ import warnings
 warnings.filterwarnings("ignore", message=".*does not have many workers.*")
 warnings.filterwarnings("ignore", message=".*`IterableDataset` has `__len__` defined.*")
 
+
 class InfiniteLinearRegressionDataModule(LightningDataModule):
     def __init__(
         self,
@@ -49,6 +50,7 @@ class InfiniteLinearRegressionDataModule(LightningDataModule):
     def val_dataloader(self):
         return DataLoader(self.val_data, batch_size=None)
 
+
 class InfiniteLinear(IterDataPipe):
     def __init__(
         self,
@@ -67,9 +69,10 @@ class InfiniteLinear(IterDataPipe):
         self.min_context = min_context
         self.max_context = max_context
         self.batch_size = batch_size
+        self.data_size = data_size
         self.noise = noise
-        self.x_dist = torch.distributions.normal.Normal(0., 1.)
-        self.w_dist = torch.distributions.normal.Normal(0., 1.)
+        self.x_dist = torch.distributions.normal.Normal(0.0, 1.0)
+        self.w_dist = torch.distributions.normal.Normal(0.0, 1.0)
 
     @torch.inference_mode()
     def function(self, x, w):
@@ -82,13 +85,13 @@ class InfiniteLinear(IterDataPipe):
     def get_batch(self, n_context=None, indices=None):
         if n_context is None:
             n_context = np.random.randint(self.min_context, self.max_context + 1)
-        
+
         w = self.w_dist.rsample((self.batch_size, self.x_dim + 1, self.y_dim))
         x = self.x_dist.rsample((self.batch_size, n_context + 1, self.x_dim))
         y = self.function(x, w)
-        y = y + self.noise * torch.randn_like(y)
+        y_noise = y + self.noise * torch.randn_like(y)
 
-        x_c, y_c = x[:, :n_context], y[:, :n_context]
+        x_c, y_c = x[:, :n_context], y_noise[:, :n_context]
         x_q, y_q = x[:, n_context], y[:, n_context]
         return (x_c, y_c), (x_q, y_q), w
 
