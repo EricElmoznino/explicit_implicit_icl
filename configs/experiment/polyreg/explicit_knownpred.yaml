@@ -37,6 +37,6 @@ trainer:
 
 callbacks:
   - _target_: lightning.pytorch.callbacks.EarlyStopping
-    monitor: "val/MSE"
+    monitor: "train/MSE"
     patience: 100
     mode: min

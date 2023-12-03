@@ -1,9 +1,9 @@
-name: polyreg
+name: sinreg
 
 task:
   _target_: tasks.regression.RegressionICL
   lr: 1e-4
-  param_dim: 5
+  param_dim: 3
   model:
     _target_: models.explicit.ExplicitModelWith
     context_model:
@@ -18,7 +18,6 @@ task:
       _target_: models.explicit.TransformerPrediction
       x_dim: 1
       y_dim: 1
-      z_dim: ${.n_features}
       n_features: 128
       n_heads: 2
       n_hidden: 256
@@ -26,9 +25,10 @@ task:
 
 data:
   _target_: data.regression.RegressionDataModule
-  kind: polynomial
+  kind: sinusoidal
   kind_kwargs:
-    order: 4
+    freqs: [2, 4, 8]
+    max_amplitudes: [1, 0.5, 0.25]
   min_context: 12
   max_context: 30
   batch_size: 128

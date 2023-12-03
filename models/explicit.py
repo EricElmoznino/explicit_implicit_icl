@@ -51,12 +51,14 @@ class TransformerContext(nn.Module):
         n_heads,
         n_hidden,
         n_layers,
+        z_dim=None,
         cross_attention=False,
     ):
         super().__init__()
 
         self.x_dim = x_dim
         self.y_dim = y_dim
+        self.z_dim = n_features if z_dim is None else z_dim
         self.n_features = n_features
         self.cross_attention = cross_attention
 
@@ -72,6 +74,8 @@ class TransformerContext(nn.Module):
             ),
             num_layers=n_layers,
         )
+        if self.z_dim != n_features:
+            self.z_encoder = nn.Linear(n_features, z_dim)
 
         self.init_weights()
 
@@ -101,6 +105,8 @@ class TransformerContext(nn.Module):
         else:
             mask = None
         z = self.context_encoder(z, mask=mask)[:, 0]
+        if self.z_dim != self.n_features:
+            z = self.z_encoder(z)
         return z
 
 
@@ -114,23 +120,23 @@ class TransformerPrediction(nn.Module):
         self,
         x_dim,
         y_dim,
-        z_dim,
         n_features,
         n_heads,
         n_hidden,
         n_layers,
+        z_dim=None,
         cross_attention=False,
     ):
         super().__init__()
 
         self.x_dim = x_dim
         self.y_dim = y_dim
-        self.z_dim = z_dim
+        self.z_dim = n_features if z_dim is None else z_dim
         self.n_features = n_features
         self.cross_attention = cross_attention
 
         self.value_embedding = nn.Linear(x_dim, n_features)
-        if z_dim != n_features:
+        if self.z_dim != n_features:
             self.context_embedding = nn.Linear(z_dim, n_features)
         else:
             self.context_embedding = None
@@ -144,7 +150,7 @@ class TransformerPrediction(nn.Module):
             ),
             num_layers=n_layers,
         )
-        self.prediction_head = nn.Linear(n_features, 1)
+        self.prediction_head = nn.Linear(n_features, self.y_dim)
 
         self.init_weights()
 
@@ -219,3 +225,19 @@ class PolyRegPrediction(nn.Module):
         w = w.unsqueeze(-1)
         y_q = torch.bmm(x_q, w).squeeze(1)
         return y_q
+
+
+class SinRegPrediction(nn.Module):
+    def __init__(self, freqs, z_dim):
+        super().__init__()
+        self.freqs = torch.FloatTensor(freqs)
+        if z_dim != len(freqs):
+            self.amplitudes_encoder = nn.Linear(z_dim, len(freqs))
+        else:
+            self.amplitudes_encoder = None
+
+    def forward(self, z, x_q):
+        x = torch.cat([torch.sin(x_q * f) for f in self.freqs], dim=-1)
+        amplitudes = self.amplitudes_encoder(z) if self.amplitudes_encoder else z
+        y = (x * amplitudes).sum(dim=-1, keepdim=True)
+        return y

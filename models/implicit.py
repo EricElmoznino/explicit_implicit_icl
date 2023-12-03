@@ -41,7 +41,7 @@ class TransformerImplicit(ImplicitModel):
             num_layers=n_layers,
         )
 
-        self.prediction_head = nn.Linear(n_features, 1)
+        self.prediction_head = nn.Linear(n_features, self.y_dim)
 
         self.init_weights()
 

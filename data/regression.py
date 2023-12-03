@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore", message=".*`IterableDataset` has `__len__` def
 
 
 class RegressionDataModule(LightningDataModule):
-    RegressionKind = Literal["polynomial"]
+    RegressionKind = Literal["polynomial", "sinusoidal"]
 
     def __init__(
         self,
@@ -33,6 +33,7 @@ class RegressionDataModule(LightningDataModule):
     def setup(self, stage=None):
         RegressionDatasetCls = {
             "polynomial": PolynomialRegressionDataset,
+            "sinusoidal": SinusoidalRegressionDataset,
         }[self.hparams.kind]
         self.train_data = RegressionDatasetCls(
             min_context=self.hparams.min_context,
@@ -146,4 +147,27 @@ class PolynomialRegressionDataset(RegressionDataset):
         x = torch.cat([x**i for i in range(self.order + 1)], dim=-1)
         params = params.unsqueeze(-1)
         y = torch.bmm(x, params)
+        return y
+
+
+class SinusoidalRegressionDataset(RegressionDataset):
+    def __init__(
+        self,
+        freqs: list[float],
+        max_amplitudes: list[float],
+        **kwargs,
+    ) -> None:
+        self.freqs = torch.FloatTensor(freqs)
+        self.amplitude_dist = torch.distributions.uniform.Uniform(
+            -torch.FloatTensor(max_amplitudes), torch.FloatTensor(max_amplitudes)
+        )
+        super().__init__(x_dim=1, y_dim=1, **kwargs)
+
+    def sample_function_params(self, n_samples) -> FloatTensor:
+        return self.amplitude_dist.sample((n_samples,))
+
+    @torch.inference_mode()
+    def function(self, x, params) -> FloatTensor:
+        x = torch.cat([torch.sin(x * f) for f in self.freqs], dim=-1)
+        y = (x * params.unsqueeze(1)).sum(dim=-1, keepdim=True)
         return y

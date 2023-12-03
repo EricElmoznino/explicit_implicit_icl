@@ -21,7 +21,7 @@ class RegressionICL(LightningModule):
         if isinstance(model, ExplicitModelWith):
             if isinstance(model.context_model, TransformerContext):
                 self.param_predictor = torch.nn.Linear(
-                    model.context_model.n_features, param_dim
+                    model.context_model.z_dim, param_dim
                 )
             else:
                 raise ValueError(
