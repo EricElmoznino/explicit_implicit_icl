@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import torch
 from torch import nn
-from models.utils import MLP
+from models.utils import MLP, FreqEncoding
 
 
 class ExplicitModel(ABC, nn.Module):
@@ -176,14 +176,45 @@ class TransformerPrediction(nn.Module):
 
 
 class MLPPrediction(nn.Module):
-    def __init__(self, x_dim, y_dim, z_dim, hidden_dim):
+    def __init__(self, x_dim, y_dim, z_dim, hidden_dim, freq_enc: bool = False):
         super().__init__()
-        self.mlp = MLP(x_dim + z_dim, hidden_dim, y_dim)
+        input_dim = x_dim * 64 if freq_enc else x_dim
+        self.enc = nn.Identity() if freq_enc is None else FreqEncoding(64)
+        self.mlp = MLP(input_dim + z_dim, hidden_dim, y_dim)
 
     def forward(self, z, x_q):
+        x_q = self.enc(x_q)
         x_q = torch.cat([z, x_q], dim=-1)
         y_q = self.mlp(x_q)
         return y_q
+
+
+class HyperMLPPrediction(nn.Module):
+    def __init__(self, x_dim, y_dim, z_dim, hidden_dims, freq_enc: bool = False):
+        super().__init__()
+        input_dim = x_dim * 64 if freq_enc else x_dim
+        self.enc = nn.Identity() if freq_enc is None else FreqEncoding(64)
+        self.layer_sizes = [input_dim] + hidden_dims + [y_dim]
+        self.layer_weight_shapes = list(
+            zip(self.layer_sizes[:-1], self.layer_sizes[1:])
+        )
+        self.total_params = sum(
+            [inp * out + out for inp, out in self.layer_weight_shapes]
+        )
+        assert z_dim == self.total_params
+
+    def forward(self, z, x_q):
+        x = self.enc(x_q)
+        i = 0
+        for layer_idx, w_shape in enumerate(self.layer_weight_shapes):
+            w_size, b_size = w_shape[0] * w_shape[1], w_shape[1]
+            w = z[:, i : i + w_size].reshape(-1, *w_shape)
+            b = z[:, i + w_size : i + w_size + b_size]
+            x = torch.bmm(x.unsqueeze(1), w).squeeze(1) + b
+            if layer_idx < len(self.layer_weight_shapes) - 1:
+                x = torch.relu(x)
+            i += w_size + b_size
+        return x
 
 
 class LinRegPrediction(nn.Module):
