@@ -6,8 +6,8 @@ from lightning import Trainer, seed_everything
 def train(cfg):
     seed_everything(cfg.seed)
 
-    task = hydra.utils.instantiate(cfg.experiment.task)
     datamodule = hydra.utils.instantiate(cfg.experiment.data)
+    task = hydra.utils.instantiate(cfg.experiment.task)
     logger = hydra.utils.instantiate(cfg.logger) if cfg.logger else False
     callbacks = (
         hydra.utils.instantiate(cfg.experiment.callbacks)

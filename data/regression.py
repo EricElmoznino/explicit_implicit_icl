@@ -30,7 +30,6 @@ class RegressionDataModule(LightningDataModule):
         super().__init__()
         self.save_hyperparameters()
 
-    def setup(self, stage=None):
         RegressionDatasetCls = {
             "polynomial": PolynomialRegressionDataset,
             "sinusoidal": SinusoidalRegressionDataset,

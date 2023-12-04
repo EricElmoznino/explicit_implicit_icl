@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import torch
 from torch import nn
+from models.utils import FreqEncoding
 
 
 class ImplicitModel(ABC, nn.Module):
@@ -21,6 +22,7 @@ class TransformerImplicit(ImplicitModel):
         n_heads,
         n_hidden,
         n_layers,
+        freq_enc: bool = False,
     ):
         super().__init__()
 
@@ -28,7 +30,9 @@ class TransformerImplicit(ImplicitModel):
         self.y_dim = y_dim
         self.n_features = n_features
 
-        self.value_embedding = nn.Linear(x_dim + y_dim, n_features)
+        input_dim = x_dim * 64 if freq_enc else x_dim
+        self.freq_enc = FreqEncoding(64) if freq_enc else nn.Identity()
+        self.value_embedding = nn.Linear(input_dim + y_dim, n_features)
         self.query_embedding = nn.Parameter(torch.randn(n_features))
         self.encoder = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
@@ -52,6 +56,7 @@ class TransformerImplicit(ImplicitModel):
                 nn.init.xavier_uniform_(p)
 
     def yq_given_d(self, x_c, y_c, x_q):
+        x_c, x_q = self.freq_enc(x_c), self.freq_enc(x_q)
         xy_c = torch.cat([x_c, y_c], dim=-1)
         xy_u = torch.cat([x_q, torch.zeros_like(y_c[:, 0])], dim=-1).unsqueeze(1)
         xy = torch.cat([xy_c, xy_u], dim=1)

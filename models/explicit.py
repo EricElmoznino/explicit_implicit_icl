@@ -126,6 +126,7 @@ class TransformerPrediction(nn.Module):
         n_layers,
         z_dim=None,
         cross_attention=False,
+        freq_enc: bool = False,
     ):
         super().__init__()
 
@@ -135,7 +136,9 @@ class TransformerPrediction(nn.Module):
         self.n_features = n_features
         self.cross_attention = cross_attention
 
-        self.value_embedding = nn.Linear(x_dim, n_features)
+        input_dim = x_dim * 64 if freq_enc else x_dim
+        self.freq_enc = FreqEncoding(64) if freq_enc else nn.Identity()
+        self.value_embedding = nn.Linear(input_dim, n_features)
         if self.z_dim != n_features:
             self.context_embedding = nn.Linear(z_dim, n_features)
         else:
@@ -161,7 +164,7 @@ class TransformerPrediction(nn.Module):
 
     def forward(self, z, x_q):
         z = self.context_embedding(z) if self.context_embedding else z
-        x_q = self.value_embedding(x_q)
+        x_q = self.value_embedding(self.freq_enc(x_q))
         pred_input = torch.stack([z, x_q], dim=1)
         if self.cross_attention:
             mask = torch.BoolTensor(
@@ -179,11 +182,11 @@ class MLPPrediction(nn.Module):
     def __init__(self, x_dim, y_dim, z_dim, hidden_dim, freq_enc: bool = False):
         super().__init__()
         input_dim = x_dim * 64 if freq_enc else x_dim
-        self.enc = nn.Identity() if freq_enc is None else FreqEncoding(64)
+        self.freq_enc = FreqEncoding(64) if freq_enc else nn.Identity()
         self.mlp = MLP(input_dim + z_dim, hidden_dim, y_dim)
 
     def forward(self, z, x_q):
-        x_q = self.enc(x_q)
+        x_q = self.freq_enc(x_q)
         x_q = torch.cat([z, x_q], dim=-1)
         y_q = self.mlp(x_q)
         return y_q
@@ -193,7 +196,7 @@ class HyperMLPPrediction(nn.Module):
     def __init__(self, x_dim, y_dim, z_dim, hidden_dims, freq_enc: bool = False):
         super().__init__()
         input_dim = x_dim * 64 if freq_enc else x_dim
-        self.enc = nn.Identity() if freq_enc is None else FreqEncoding(64)
+        self.freq_enc = FreqEncoding(64) if freq_enc else nn.Identity()
         self.layer_sizes = [input_dim] + hidden_dims + [y_dim]
         self.layer_weight_shapes = list(
             zip(self.layer_sizes[:-1], self.layer_sizes[1:])
@@ -204,7 +207,7 @@ class HyperMLPPrediction(nn.Module):
         assert z_dim == self.total_params
 
     def forward(self, z, x_q):
-        x = self.enc(x_q)
+        x = self.freq_enc(x_q)
         i = 0
         for layer_idx, w_shape in enumerate(self.layer_weight_shapes):
             w_size, b_size = w_shape[0] * w_shape[1], w_shape[1]

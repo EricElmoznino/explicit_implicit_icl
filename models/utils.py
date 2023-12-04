@@ -25,4 +25,7 @@ class FreqEncoding(nn.Module):
         self.register_buffer("freqs", freqs)
 
     def forward(self, x):
-        return torch.einsum("b d, k -> b d k", x, self.freqs).view(x.shape[0], -1)
+        x_enc = x.unsqueeze(1) if x.ndim == 2 else x
+        x_enc = torch.einsum("b c d, k -> b c d k", x_enc, self.freqs)
+        x_enc = x_enc.view(*x.shape[:-1], -1)
+        return x_enc
