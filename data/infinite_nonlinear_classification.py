@@ -132,7 +132,7 @@ class InfiniteNonlinear(IterDataPipe):
         self.model.apply(init_weights)
         w = self.get_parameters().view(self.batch_size, -1)
 
-        x = self.x_dist.rsample((self.batch_size, n_context + 1, self.x_dim))
+        x = self.x_dist.rsample((self.batch_size, 2 * n_context, self.x_dim))
         if torch.cuda.is_available():
             x = x.cuda()
 
@@ -141,7 +141,7 @@ class InfiniteNonlinear(IterDataPipe):
         y = torch.distributions.categorical.Categorical(logits=y / self.temperature).sample().unsqueeze(-1)
 
         x_c, y_c = x[:, :n_context], y[:, :n_context]
-        x_q, y_q = x[:, n_context], y[:, n_context]
+        x_q, y_q = x[:, n_context:], y[:, n_context:]
         return (x_c, y_c), (x_q, y_q), w
 
     def __len__(self) -> int:

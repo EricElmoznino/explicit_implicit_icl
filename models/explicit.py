@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import torch
 from torch import nn
 from models.utils import MLP
-
+import numpy as np
 
 class ExplicitModel(ABC, nn.Module):
     def forward(self, x_c, y_c, x_q) -> tuple[torch.Tensor, torch.Tensor]:
@@ -198,4 +198,68 @@ class AffinePrediction(nn.Module):
             w = z
         w = w.reshape(-1, self.x_dim + 1, self.y_dim)
         y_q = (x_q.unsqueeze(1) @ w).squeeze(1)
+        return y_q
+
+class ScrambledTransformerPrediction(nn.Module):
+    def __init__(
+        self,
+        x_dim,
+        y_dim,
+        z_dim,
+        n_features,
+        n_heads,
+        n_hidden,
+        n_layers,
+        cross_attention=False,
+    ):
+        super().__init__()
+
+        self.x_dim = x_dim
+        self.y_dim = y_dim
+        self.z_dim = z_dim
+
+        self.permutation = np.arange(z_dim)
+        np.random.choice(self.permutation)
+
+        self.n_features = n_features
+        self.cross_attention = cross_attention
+
+        self.value_embedding = nn.Linear(x_dim, n_features)
+        if z_dim != n_features:
+            self.context_embedding = nn.Linear(z_dim, n_features)
+        else:
+            self.context_embedding = None
+        self.prediction_encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=n_features,
+                nhead=n_heads,
+                dim_feedforward=n_hidden,
+                dropout=0.0,
+                batch_first=True,
+            ),
+            num_layers=n_layers,
+        )
+        self.prediction_head = nn.Linear(n_features, 1)
+
+        self.init_weights()
+
+    def init_weights(self):
+        for p in self.prediction_encoder.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p)
+
+    def forward(self, z, x_q):
+        z = z[..., self.permutation]
+        z = self.context_embedding(z) if self.context_embedding else z
+        x_q = self.value_embedding(x_q)
+        pred_input = torch.stack([z, x_q], dim=1)
+        if self.cross_attention:
+            mask = torch.BoolTensor(
+                [[False, True], [False, False]],
+                device=pred_input.device,
+            )
+        else:
+            mask = None
+        y_q = self.prediction_encoder(pred_input, mask=mask)[:, -1]
+        y_q = self.prediction_head(y_q)
         return y_q
