@@ -28,7 +28,7 @@ data:
   x_dim: 1
   y_dim: 1
   min_context: 3
-  max_context: 64
+  max_context: 128
   batch_size: 128
   train_size: 1000
   val_size: 1000

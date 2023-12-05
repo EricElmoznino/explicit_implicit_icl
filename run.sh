@@ -9,8 +9,9 @@ conda activate causal_icl
 
 export PYTHONUNBUFFERED=1
 
-python train.py experiment=linear_regression/onedim_implicit.yaml logger.name="implicit"
-python train.py experiment=linear_regression/onedim_explicit_mlppred.yaml logger.name="explicit_mlp"
-python train.py experiment=linear_regression/onedim_explicit_transformerpred.yaml logger.name="explicit_tsf"
-python train.py experiment=linear_regression/onedim_explicit_affinepred.yaml logger.name="explicit_affine"
-python train.py experiment=linear_regression/onedim_explicit_scrambledtransformerpred.yaml logger.name="explicit_scrambledtsf"
+for x_dim in 1 8 64; do
+    python train.py experiment=linear_regression/onedim_implicit.yaml logger.name="implicit" experiment.data.x_dim=$x_dim
+    python train.py experiment=linear_regression/onedim_explicit_mlppred.yaml logger.name="explicit_mlp" experiment.data.x_dim=$x_dim
+    python train.py experiment=linear_regression/onedim_explicit_transformerpred.yaml logger.name="explicit_tsf" experiment.data.x_dim=$x_dim
+    python train.py experiment=linear_regression/onedim_explicit_affinepred.yaml logger.name="explicit_affine" experiment.data.x_dim=$x_dim
+done
