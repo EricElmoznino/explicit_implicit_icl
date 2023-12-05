@@ -1,4 +1,4 @@
-name: linreg-onedim
+name: Linear_Regression
 
 task:
   _target_: tasks.linear_regression.LinearRegressionICL
@@ -17,10 +17,10 @@ data:
   x_dim: 1
   y_dim: 1
   min_context: 3
-  max_context: 20
+  max_context: 128
   batch_size: 128
-  train_size: 128
-  val_size: 128
+  train_size: 1000
+  val_size: 1000
   noise: 0.5
 
 trainer:

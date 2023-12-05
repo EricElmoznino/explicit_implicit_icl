@@ -51,14 +51,12 @@ class TransformerContext(nn.Module):
         n_heads,
         n_hidden,
         n_layers,
-        cross_attention=False,
     ):
         super().__init__()
 
         self.x_dim = x_dim
         self.y_dim = y_dim
         self.n_features = n_features
-        self.cross_attention = cross_attention
 
         self.value_embedding = nn.Linear(x_dim + y_dim, n_features)
         self.context_embedding = nn.Parameter(torch.randn(n_features))
@@ -90,16 +88,13 @@ class TransformerContext(nn.Module):
             .expand(xy_c.shape[0], -1, -1)
         )
         z = torch.cat([c_token, xy_c], dim=1)
-        if self.cross_attention:
-            mask = torch.zeros(
-                xy_c.shape[1] + 1,
-                xy_c.shape[1] + 1,
-                dtype=torch.bool,
-                device=z.device,
-            )
-            mask[1:, :1] = True
-        else:
-            mask = None
+        mask = torch.zeros(
+            xy_c.shape[1] + 1,
+            xy_c.shape[1] + 1,
+            dtype=torch.bool,
+            device=z.device,
+        )
+        mask[:, 0] = True
         z = self.context_encoder(z, mask=mask)[:, 0]
         return z
 
@@ -127,7 +122,6 @@ class TransformerPrediction(nn.Module):
         self.y_dim = y_dim
         self.z_dim = z_dim
         self.n_features = n_features
-        self.cross_attention = cross_attention
 
         self.value_embedding = nn.Linear(x_dim, n_features)
         if z_dim != n_features:
@@ -154,17 +148,16 @@ class TransformerPrediction(nn.Module):
                 nn.init.xavier_uniform_(p)
 
     def forward(self, z, x_q):
+        bsz, q_len, _ = x_q.shape
+        z = z.unsqueeze(1)
         z = self.context_embedding(z) if self.context_embedding else z
         x_q = self.value_embedding(x_q)
-        pred_input = torch.stack([z, x_q], dim=1)
-        if self.cross_attention:
-            mask = torch.BoolTensor(
-                [[False, True], [False, False]],
-                device=pred_input.device,
-            )
-        else:
-            mask = None
-        y_q = self.prediction_encoder(pred_input, mask=mask)[:, -1]
+
+        src_mask = (1 - torch.eye(1 + q_len)).bool().to(x_q.device)
+        src_mask[:, 0] = False
+
+        pred_input = torch.cat([z, x_q], dim=1)
+        y_q = self.prediction_encoder(pred_input, mask=src_mask)[:, -q_len:]
         y_q = self.prediction_head(y_q)
         return y_q
 
@@ -175,6 +168,7 @@ class MLPPrediction(nn.Module):
         self.mlp = MLP(x_dim + z_dim, hidden_dim, y_dim)
 
     def forward(self, z, x_q):
+        z = z.unsqueeze(1).repeat(1, x_q.shape[1], 1)
         x_q = torch.cat([z, x_q], dim=-1)
         y_q = self.mlp(x_q)
         return y_q
@@ -191,13 +185,13 @@ class AffinePrediction(nn.Module):
             self.w_encoder = None
 
     def forward(self, z, x_q):
-        x_q = torch.cat([x_q, torch.ones_like(x_q[:, :1])], dim=-1)
+        x_q = torch.cat([x_q, torch.ones_like(x_q[..., :1])], dim=-1)
         if self.w_encoder:
             w = self.w_encoder(z)
         else:
             w = z
         w = w.reshape(-1, self.x_dim + 1, self.y_dim)
-        y_q = (x_q.unsqueeze(1) @ w).squeeze(1)
+        y_q = (x_q @ w)
         return y_q
 
 class ScrambledTransformerPrediction(nn.Module):
@@ -250,16 +244,15 @@ class ScrambledTransformerPrediction(nn.Module):
 
     def forward(self, z, x_q):
         z = z[..., self.permutation]
+        bsz, q_len, _ = x_q.shape
+        z = z.unsqueeze(1)
         z = self.context_embedding(z) if self.context_embedding else z
         x_q = self.value_embedding(x_q)
-        pred_input = torch.stack([z, x_q], dim=1)
-        if self.cross_attention:
-            mask = torch.BoolTensor(
-                [[False, True], [False, False]],
-                device=pred_input.device,
-            )
-        else:
-            mask = None
-        y_q = self.prediction_encoder(pred_input, mask=mask)[:, -1]
+
+        src_mask = (1 - torch.eye(1 + q_len)).bool().to(x_q.device)
+        src_mask[:, 0] = False
+
+        pred_input = torch.cat([z, x_q], dim=1)
+        y_q = self.prediction_encoder(pred_input, mask=src_mask)[:, -q_len:]
         y_q = self.prediction_head(y_q)
         return y_q

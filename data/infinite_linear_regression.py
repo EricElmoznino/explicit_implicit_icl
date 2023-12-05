@@ -18,7 +18,7 @@ class InfiniteLinearRegressionDataModule(LightningDataModule):
         batch_size: int = 128,
         train_size: int = 10000,
         val_size: int = 1000,
-        noise: float = 0.5,
+        noise: float = 0.,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -52,11 +52,11 @@ class InfiniteLinearRegressionDataModule(LightningDataModule):
 class InfiniteLinear(IterDataPipe):
     def __init__(
         self,
-        data_size: int,
         x_dim: int,
         y_dim: int,
         min_context: int,
         max_context: int,
+        data_size: int = 1000,
         batch_size: int = 128,
         noise: float = 0.5,
     ) -> None:
@@ -66,6 +66,7 @@ class InfiniteLinear(IterDataPipe):
         self.y_dim = y_dim
         self.min_context = min_context
         self.max_context = max_context
+        self.data_size = data_size
         self.batch_size = batch_size
         self.noise = noise
         self.x_dist = torch.distributions.normal.Normal(0., 1.)
@@ -82,15 +83,17 @@ class InfiniteLinear(IterDataPipe):
     def get_batch(self, n_context=None, indices=None):
         if n_context is None:
             n_context = np.random.randint(self.min_context, self.max_context + 1)
+        if indices is None:
+            indices = range(self.batch_size)
         
         w = self.w_dist.rsample((self.batch_size, self.x_dim + 1, self.y_dim))
         x = self.x_dist.rsample((self.batch_size, 2 * n_context, self.x_dim))
         y = self.function(x, w)
         y = y + self.noise * torch.randn_like(y)
 
-        x_c, y_c = x[:, :n_context], y[:, :n_context]
-        x_q, y_q = x[:, n_context:], y[:, n_context:]
-        return (x_c, y_c), (x_q, y_q), w
+        x_c, y_c = x[indices, :n_context], y[indices, :n_context]
+        x_q, y_q = x[indices, n_context:], y[indices, n_context:]
+        return (x_c, y_c), (x_q, y_q), w[indices]
 
     def __len__(self) -> int:
         return self.data_size // self.batch_size

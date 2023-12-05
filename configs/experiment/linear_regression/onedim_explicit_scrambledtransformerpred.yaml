@@ -14,11 +14,14 @@ task:
       n_hidden: 512
       n_layers: 4
     prediction_model:
-      _target_: models.explicit.MLPPrediction
+      _target_: models.explicit.ScrambledTransformerPrediction
       x_dim: 1
       y_dim: 1
-      z_dim: ${..context_model.n_features}
-      hidden_dim: 512
+      z_dim: ${.n_features}
+      n_features: 256
+      n_heads: 4
+      n_hidden: 512
+      n_layers: 4
 
 data:
   _target_: data.infinite_linear_regression.InfiniteLinearRegressionDataModule

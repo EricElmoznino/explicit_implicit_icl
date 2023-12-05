@@ -82,23 +82,22 @@ class LinearRegressionICL(LightningModule):
             n_context=dataset.max_context, indices=range(n_examples)
         )
         x_c, y_c, w = x_c.to(self.device), y_c.to(self.device), w.to(self.device)
-        ypred = []
-        x_qs = torch.linspace(-1, 1, 50)
-        for x_q in x_qs:
-            x_q = x_q * torch.ones(n_examples, 1, device=self.device)
-            y_q_pred, _ = self.model(x_c, y_c, x_q)
-            ypred.append(y_q_pred.squeeze(-1))
-        ypred = torch.stack(ypred, dim=1)
+        x = torch.linspace(x_c.min(), x_c.max(), 100)
 
-        x = x_qs.numpy()
-        ypred = ypred.cpu().numpy()
-        w = w.cpu().numpy()[..., -1]
+        x_q = x.view(1, -1, 1).repeat(n_examples, 1, 1).to(self.device)
+        ypred, _ = self.model(x_c, y_c, x_q)
 
+        x_c = x_c.cpu()
+        y_c = y_c.cpu()
+        ypred = ypred.cpu()
+        w = w.cpu()
+        
         fig, axs = plt.subplots(1, n_examples, figsize=(4 * n_examples, 4))
         for i, ax in enumerate(axs):
-            ax.plot([-1, 1], [-w[i, 0] + w[i, 1], w[i, 0] + w[i, 1]], label="True")
-            ax.plot(x, ypred[i], label="Model")
-            ax.set(xlabel="x", ylabel="y", ylim=(-2, 2))
+            ax.scatter(x_c[i, :, 0], y_c[i, :, 0], label="Context", s=2)
+            ax.plot([x.min(), x.max()], [x.min() * w[i, 0] + w[i, 1], x.max() * w[i, 0] + w[i, 1]], label="True", c='black')
+            ax.plot(x, ypred[i, :, 0], label="Model", c='red')
+            ax.set(xlabel="x", ylabel="y")
             ax.legend(loc="upper left")
         fig.tight_layout()
 

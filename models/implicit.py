@@ -29,7 +29,7 @@ class TransformerImplicit(ImplicitModel):
         self.n_features = n_features
 
         self.value_embedding = nn.Linear(x_dim + y_dim, n_features)
-        self.query_embedding = nn.Parameter(torch.randn(n_features)) / np.sqrt(n_features)
+        self.query_embedding = nn.Parameter(torch.randn(n_features) / np.sqrt(n_features))
         self.encoder = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
                 d_model=n_features,
@@ -61,12 +61,15 @@ class TransformerImplicit(ImplicitModel):
         _, q_len, _ = x_q.shape
 
         xy_c = torch.cat([x_c, y_c], dim=-1)
-        xy_u = torch.cat([x_q, torch.zeros_like(y_c[:, 0])], dim=-1).unsqueeze(1)
+        xy_u = torch.cat([x_q, torch.zeros_like(x_q[..., :1])], dim=-1)
         xy = torch.cat([xy_c, xy_u], dim=1)
 
-        xy[:, -q_len:] += self.query_embedding.unsqueeze(0)
         xy = self.value_embedding(xy)
-        y_q = self.encoder(xy)[:, -q_len:]
+        xy[:, -q_len:] += self.query_embedding.view(1, 1, self.n_features)
 
+        src_mask = torch.zeros(c_len + q_len, c_len + q_len).bool().to(xy.device)
+        src_mask[:, -q_len:] = True
+
+        y_q = self.encoder(xy, mask=src_mask)[:, -q_len:]
         y_q = self.prediction_head(y_q)
         return y_q
