@@ -24,7 +24,8 @@ class RegressionDataModule(LightningDataModule):
         train_size: int = 10000,
         val_size: int = 1000,
         noise: float = 0.5,
-        ood: bool = True,
+        ood_train: bool = False,
+        ood_val: bool = True,
         kind_kwargs: dict[str, Any] = {},
     ):
         super().__init__()
@@ -33,24 +34,24 @@ class RegressionDataModule(LightningDataModule):
         RegressionDatasetCls = {
             "polynomial": PolynomialRegressionDataset,
             "sinusoidal": SinusoidalRegressionDataset,
-        }[self.hparams.kind]
+        }[kind]
         self.train_data = RegressionDatasetCls(
-            min_context=self.hparams.min_context,
-            max_context=self.hparams.max_context,
-            batch_size=self.hparams.batch_size,
-            data_size=self.hparams.train_size,
-            noise=self.hparams.noise,
-            ood=False,
-            **self.hparams.kind_kwargs,
+            min_context=min_context,
+            max_context=max_context,
+            batch_size=batch_size,
+            data_size=train_size,
+            noise=noise,
+            ood=ood_train,
+            **kind_kwargs,
         )
         self.val_data = RegressionDatasetCls(
-            min_context=self.hparams.min_context,
-            max_context=self.hparams.max_context,
-            batch_size=self.hparams.batch_size,
-            data_size=self.hparams.val_size,
-            noise=self.hparams.noise,
-            ood=self.hparams.ood,
-            **self.hparams.kind_kwargs,
+            min_context=min_context,
+            max_context=max_context,
+            batch_size=batch_size,
+            data_size=val_size,
+            noise=noise,
+            ood=ood_val,
+            **kind_kwargs,
         )
 
     def train_dataloader(self):

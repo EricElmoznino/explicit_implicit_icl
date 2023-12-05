@@ -25,7 +25,8 @@ data:
   train_size: 1280
   val_size: 128
   noise: 0.0
-  ood: True
+  ood_train: False
+  ood_val: True
 
 trainer:
   max_epochs: 1000
