@@ -1,4 +1,5 @@
-name: sinreg
+task_name: sinreg
+name: explicit_hypermlppred
 
 task:
   _target_: tasks.regression.RegressionICL

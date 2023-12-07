@@ -1,14 +1,14 @@
 defaults:
   - submitit_slurm
 
-partition: long
+partition: main
 cpus_per_task: 6
 gres: gpu:1
 tasks_per_node: 1
 mem_gb: 32
-timeout_min: 1440  # 24 hours
+timeout_min: 60  # 1 hour
 array_parallelism: 20
 
 setup:
   - "module --quiet load miniconda/3"
-  - "conda activate implicit-explicit"
+  - "conda activate pytorch"

@@ -15,7 +15,7 @@ class RegressionICL(LightningModule):
         lr: float = 1e-4,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore="model")
+        self.save_hyperparameters()
         self.model = model
 
         if isinstance(model, ExplicitModelWith):
@@ -74,7 +74,7 @@ class RegressionICL(LightningModule):
             self.train()
 
     @torch.inference_mode()
-    def plot_model(self, n_examples=4):
+    def plot_model(self, n_examples=4, log=True):
         dataset = self.trainer.datamodule.train_data
         (x_c, y_c), _, params = dataset.get_batch(
             n_context=dataset.max_context, indices=range(n_examples)
@@ -99,7 +99,9 @@ class RegressionICL(LightningModule):
             ax.legend(loc="upper left")
         fig.tight_layout()
 
-        self.logger.log_image(f"examples", [fig2img(fig)])
+        if log:
+            self.logger.log_image(f"examples", [fig2img(fig)])
+        return fig, axs
 
     def configure_optimizers(self):
         param_groups = [{"params": self.model.parameters()}]

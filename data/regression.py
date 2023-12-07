@@ -6,6 +6,7 @@ from torch import FloatTensor
 from torch.utils.data import DataLoader
 from torchdata.datapipes.iter import IterDataPipe
 from lightning import LightningDataModule
+from lightning.pytorch.utilities.seed import isolate_rng
 import warnings
 
 warnings.filterwarnings("ignore", message=".*does not have many workers.*")
@@ -82,7 +83,9 @@ class RegressionDataset(ABC, IterDataPipe):
         self.data_size = data_size
         self.noise = noise
         self.ood = ood
-        self.params_fixed = self.sample_function_params(100)
+        with isolate_rng():
+            torch.manual_seed(0)
+            self.params_fixed = self.sample_function_params(100)
 
     def sample_x(self, n_samples, n_context):
         x_c = torch.randn(n_samples, n_context, self.x_dim)

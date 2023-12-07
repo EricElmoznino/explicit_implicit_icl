@@ -6,12 +6,13 @@ defaults:
 wandb_account: null
 save_dir: "logs/"
 seed: 27
+save: False
 
 logger:
   _target_: lightning.pytorch.loggers.WandbLogger
   entity: null
-  name: ${now:%Y-%m-%d}_${now:%H-%M-%S}
-  project: "Explicit-Implicit_${experiment.name}"
+  name: ${experiment.name}
+  project: "Explicit-Implicit_${experiment.task_name}"
   save_dir: ${save_dir}
   offline: False
   tags: null

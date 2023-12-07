@@ -1,4 +1,5 @@
-name: sinreg
+task_name: sinreg
+name: explicit_knownpred
 
 task:
   _target_: tasks.regression.RegressionICL

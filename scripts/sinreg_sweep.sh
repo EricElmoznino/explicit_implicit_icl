@@ -1,0 +1,1 @@
+python train.py --multirun hydra/launcher=mila_eric save_dir=/home/mila/e/eric.elmoznino/scratch/explicit_implicit_icl/logs save=True experiment=sinreg/implicit,sinreg/explicit_transformerpred,sinreg/explicit_knownpred seed=0,1,2,3,4,5,6,7,8,9
