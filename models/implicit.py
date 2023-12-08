@@ -56,12 +56,11 @@ class TransformerImplicit(ImplicitModel):
         # y_c: (bsz, c_len, y_dim)
         # x_q: (bsz, q_len, x_dim)
 
-        # IF CLASSIFICATION, CHANGE y_c to ONE_HOT
         bsz, c_len, _ = x_c.shape
         _, q_len, _ = x_q.shape
 
         xy_c = torch.cat([x_c, y_c], dim=-1)
-        xy_u = torch.cat([x_q, torch.zeros_like(x_q[..., :1])], dim=-1)
+        xy_u = torch.cat([x_q, torch.zeros(bsz, q_len, self.y_dim).to(x_q.device)], dim=-1)
         xy = torch.cat([xy_c, xy_u], dim=1)
 
         xy = self.value_embedding(xy)

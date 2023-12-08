@@ -52,11 +52,11 @@ class InfiniteLinearClassificationDataModule(LightningDataModule):
 class InfiniteLinear(IterDataPipe):
     def __init__(
         self,
-        data_size: int,
         x_dim: int,
         y_dim: int,
         min_context: int,
         max_context: int,
+        data_size: int = 1000,
         batch_size: int = 128,
         temperature: float = 0.1,
     ) -> None:
@@ -66,8 +66,12 @@ class InfiniteLinear(IterDataPipe):
         self.y_dim = y_dim
         self.min_context = min_context
         self.max_context = max_context
+        self.data_size = data_size
         self.batch_size = batch_size
         self.temperature = temperature
+
+        self.n_params = (x_dim + 1) * y_dim
+
         self.x_dist = torch.distributions.normal.Normal(0., 1.)
         self.w_dist = torch.distributions.normal.Normal(0., 1.)
 
@@ -79,14 +83,14 @@ class InfiniteLinear(IterDataPipe):
         y = torch.bmm(x, w)
         return y
 
-    def get_batch(self, n_context=None, indices=None):
+    def get_batch(self, n_context=None):
         if n_context is None:
             n_context = np.random.randint(self.min_context, self.max_context + 1)
         
         w = self.w_dist.rsample((self.batch_size, self.x_dim + 1, self.y_dim))
         x = self.x_dist.rsample((self.batch_size, 2 * n_context, self.x_dim))
         y = self.function(x, w)
-        y = torch.distributions.categorical.Categorical(logits=y / self.temperature).sample().unsqueeze(-1)
+        y = torch.distributions.categorical.Categorical(logits=y / self.temperature).sample()
 
         x_c, y_c = x[:, :n_context], y[:, :n_context]
         x_q, y_q = x[:, n_context:], y[:, n_context:]

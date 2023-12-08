@@ -23,7 +23,7 @@ class InfiniteNonlinearRegressionDataModule(LightningDataModule):
         max_context: int,
         activation: str = "relu",
         layers: int = 1,
-        hidden_dim: int = 32,
+        hidden_dim: int = 64,
         batch_size: int = 128,
         train_size: int = 10000,
         val_size: int = 1000,
@@ -74,7 +74,7 @@ class InfiniteNonlinear(IterDataPipe):
         max_context: int,
         activation: str = "relu",
         layers: int = 1,
-        hidden_dim: int = 32,
+        hidden_dim: int = 64,
         batch_size: int = 128,
         noise: float = 0.5,
     ) -> None:
@@ -84,6 +84,7 @@ class InfiniteNonlinear(IterDataPipe):
         self.y_dim = y_dim
         self.min_context = min_context
         self.max_context = max_context
+        self.data_size = data_size
         self.hidden_dim = hidden_dim
         self.layers = layers
         self.batch_size = batch_size
@@ -102,6 +103,8 @@ class InfiniteNonlinear(IterDataPipe):
         if torch.cuda.is_available():
             self.model = self.model.cuda()
 
+        self.n_params = sum(p.numel() for p in self.model.parameters()) // self.batch_size
+
     def get_model(self):
         layers = [BatchedLinear(self.x_dim, self.hidden_dim, self.batch_size), self.activation]
         for _ in range(self.layers - 1):
@@ -111,7 +114,6 @@ class InfiniteNonlinear(IterDataPipe):
         model = torch.nn.Sequential(*layers)
         return model
 
-    @torch.inference_mode()
     def get_parameters(self):
         w = []
         for name, param in self.model.named_parameters():
@@ -120,12 +122,12 @@ class InfiniteNonlinear(IterDataPipe):
         return w
 
     @torch.inference_mode()
-    def function(self, x):
+    def function(self, x, w=None):
         # x: (bsz, n_samples, x_dim)
         y = self.model(x)
         return y
 
-    def get_batch(self, n_context=None, indices=None):
+    def get_batch(self, n_context=None):
         if n_context is None:
             n_context = np.random.randint(self.min_context, self.max_context + 1)
         

@@ -69,6 +69,9 @@ class InfiniteLinear(IterDataPipe):
         self.data_size = data_size
         self.batch_size = batch_size
         self.noise = noise
+
+        self.n_params = (x_dim + 1) * y_dim
+
         self.x_dist = torch.distributions.normal.Normal(0., 1.)
         self.w_dist = torch.distributions.normal.Normal(0., 1.)
 
@@ -80,20 +83,18 @@ class InfiniteLinear(IterDataPipe):
         y = torch.bmm(x, w)
         return y
 
-    def get_batch(self, n_context=None, indices=None):
+    def get_batch(self, n_context=None):
         if n_context is None:
             n_context = np.random.randint(self.min_context, self.max_context + 1)
-        if indices is None:
-            indices = range(self.batch_size)
         
         w = self.w_dist.rsample((self.batch_size, self.x_dim + 1, self.y_dim))
         x = self.x_dist.rsample((self.batch_size, 2 * n_context, self.x_dim))
         y = self.function(x, w)
         y = y + self.noise * torch.randn_like(y)
 
-        x_c, y_c = x[indices, :n_context], y[indices, :n_context]
-        x_q, y_q = x[indices, n_context:], y[indices, n_context:]
-        return (x_c, y_c), (x_q, y_q), w[indices]
+        x_c, y_c = x[:, :n_context], y[:, :n_context]
+        x_q, y_q = x[:, n_context:], y[:, n_context:]
+        return (x_c, y_c), (x_q, y_q), w
 
     def __len__(self) -> int:
         return self.data_size // self.batch_size

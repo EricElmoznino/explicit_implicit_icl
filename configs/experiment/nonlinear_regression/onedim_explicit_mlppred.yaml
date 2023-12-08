@@ -1,7 +1,7 @@
-name: linreg-onedim
+name: Nonlinear_Regression
 
 task:
-  _target_: tasks.linear_regression.LinearRegressionICL
+  _target_: tasks.regression.RegressionICL
   lr: 1e-4
   model:
     _target_: models.explicit.ExplicitModelWith
@@ -9,33 +9,30 @@ task:
       _target_: models.explicit.TransformerContext
       x_dim: 1
       y_dim: 1
-      n_features: 128
-      n_heads: 2
-      n_hidden: 256
+      n_features: 256
+      n_heads: 4
+      n_hidden: 512
       n_layers: 4
     prediction_model:
       _target_: models.explicit.MLPPrediction
       x_dim: 1
       y_dim: 1
       z_dim: ${..context_model.n_features}
-      hidden_dim: 410
+      hidden_dim: 512
 
 data:
-  _target_: data.finite_linear.FiniteLinearDataModule
+  _target_: data.infinite_nonlinear_regression.InfiniteNonlinearRegressionDataModule
   x_dim: 1
   y_dim: 1
   min_context: 3
-  max_context: 20
+  max_context: 128
+  activation: "relu"
+  layers: 1
+  hidden_dim: 64
   batch_size: 128
-  train_size: 128
-  val_size: 128
-  noise: 0.0
+  train_size: 1000
+  val_size: 1000
+  noise: 0.5
 
 trainer:
   max_epochs: 1000
-
-callbacks:
-  - _target_: lightning.pytorch.callbacks.EarlyStopping
-    monitor: "val/MSE"
-    patience: 100
-    mode: min

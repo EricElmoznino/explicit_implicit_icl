@@ -23,7 +23,7 @@ class InfiniteNonlinearClassificationDataModule(LightningDataModule):
         max_context: int,
         activation: str = "relu",
         layers: int = 1,
-        hidden_dim: int = 32,
+        hidden_dim: int = 64,
         batch_size: int = 128,
         train_size: int = 10000,
         val_size: int = 1000,
@@ -86,6 +86,7 @@ class InfiniteNonlinear(IterDataPipe):
         self.max_context = max_context
         self.hidden_dim = hidden_dim
         self.layers = layers
+        self.data_size = data_size
         self.batch_size = batch_size
         self.temperature = temperature
 
@@ -102,6 +103,8 @@ class InfiniteNonlinear(IterDataPipe):
         if torch.cuda.is_available():
             self.model = self.model.cuda()
 
+        self.n_params = sum(p.numel() for p in self.model.parameters()) // self.batch_size
+
     def get_model(self):
         layers = [BatchedLinear(self.x_dim, self.hidden_dim, self.batch_size), self.activation]
         for _ in range(self.layers - 1):
@@ -111,7 +114,6 @@ class InfiniteNonlinear(IterDataPipe):
         model = torch.nn.Sequential(*layers)
         return model
 
-    @torch.inference_mode()
     def get_parameters(self):
         w = []
         for name, param in self.model.named_parameters():
@@ -125,7 +127,7 @@ class InfiniteNonlinear(IterDataPipe):
         y = self.model(x)
         return y
 
-    def get_batch(self, n_context=None, indices=None):
+    def get_batch(self, n_context=None):
         if n_context is None:
             n_context = np.random.randint(self.min_context, self.max_context + 1)
         
@@ -137,8 +139,7 @@ class InfiniteNonlinear(IterDataPipe):
             x = x.cuda()
 
         y = self.function(x)
-        print(y.shape)
-        y = torch.distributions.categorical.Categorical(logits=y / self.temperature).sample().unsqueeze(-1)
+        y = torch.distributions.categorical.Categorical(logits=y / self.temperature).sample()
 
         x_c, y_c = x[:, :n_context], y[:, :n_context]
         x_q, y_q = x[:, n_context:], y[:, n_context:]

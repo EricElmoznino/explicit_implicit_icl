@@ -114,7 +114,6 @@ class TransformerPrediction(nn.Module):
         n_heads,
         n_hidden,
         n_layers,
-        cross_attention=False,
     ):
         super().__init__()
 
@@ -138,7 +137,7 @@ class TransformerPrediction(nn.Module):
             ),
             num_layers=n_layers,
         )
-        self.prediction_head = nn.Linear(n_features, 1)
+        self.prediction_head = nn.Linear(n_features, self.y_dim)
 
         self.init_weights()
 

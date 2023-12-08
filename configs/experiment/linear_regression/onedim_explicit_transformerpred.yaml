@@ -1,7 +1,7 @@
 name: Linear_Regression
 
 task:
-  _target_: tasks.linear_regression.LinearRegressionICL
+  _target_: tasks.regression.RegressionICL
   lr: 1e-4
   model:
     _target_: models.explicit.ExplicitModelWith
@@ -36,9 +36,3 @@ data:
 
 trainer:
   max_epochs: 1000
-
-callbacks:
-  - _target_: lightning.pytorch.callbacks.EarlyStopping
-    monitor: "val/MSE"
-    patience: 100
-    mode: min
