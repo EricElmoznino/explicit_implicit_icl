@@ -1,7 +1,7 @@
 defaults:
   - submitit_slurm
 
-partition: main
+partition: long
 cpus_per_task: 6
 gres: gpu:1
 tasks_per_node: 1
