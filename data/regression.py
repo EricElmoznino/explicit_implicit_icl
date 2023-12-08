@@ -71,7 +71,7 @@ class RegressionDataset(ABC, IterDataPipe):
         min_context: int,
         max_context: int,
         batch_size: int = 128,
-        noise: float = 0.5,
+        noise: float = 0.0,
         ood: bool = False,
     ) -> None:
         super().__init__()

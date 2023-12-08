@@ -31,6 +31,9 @@ class RegressionICL(LightningModule):
         else:
             self.param_predictor = None
 
+    def forward(self, x_c, y_c, x_q):
+        return self.model(x_c, y_c, x_q)
+
     def training_step(self, batch, batch_idx):
         (x_c, y_c), (x_q, y_q), params = batch
         y_q_pred, z = self.model(x_c, y_c, x_q)
@@ -74,7 +77,7 @@ class RegressionICL(LightningModule):
             self.train()
 
     @torch.inference_mode()
-    def plot_model(self, n_examples=4, log=True):
+    def plot_model(self, n_examples=4):
         dataset = self.trainer.datamodule.train_data
         (x_c, y_c), _, params = dataset.get_batch(
             n_context=dataset.max_context, indices=range(n_examples)
@@ -99,9 +102,7 @@ class RegressionICL(LightningModule):
             ax.legend(loc="upper left")
         fig.tight_layout()
 
-        if log:
-            self.logger.log_image(f"examples", [fig2img(fig)])
-        return fig, axs
+        self.logger.log_image(f"examples", [fig2img(fig)])
 
     def configure_optimizers(self):
         param_groups = [{"params": self.model.parameters()}]
