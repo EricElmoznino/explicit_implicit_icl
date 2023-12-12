@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH --gres=gpu:rtx8000:1
-#SBATCH --time=23:59:00
+#SBATCH --time=47:59:00
 #SBATCH --mem=16G
 
 module load anaconda/3
