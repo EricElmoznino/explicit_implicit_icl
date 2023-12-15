@@ -14,25 +14,23 @@ task:
       n_hidden: 512
       n_layers: 4
     prediction_model:
-      _target_: models.explicit.ScrambledTransformerPrediction
+      _target_: models.explicit.MLPPrediction
       x_dim: 2
       y_dim: 2
-      z_dim: ${.n_features}
-      n_features: 256
-      n_heads: 4
-      n_hidden: 512
-      n_layers: 4
+      z_dim: ${..context_model.n_features}
+      hidden_dim: 512
 
 data:
-  _target_: data.infinite_linear_classification.InfiniteLinearClassificationDataModule
+  _target_: data.classification.ClassificationDataModule
+  kind: linear 
   x_dim: 2
   y_dim: 2
-  min_context: 3
+  min_context: 16
   max_context: 128
   batch_size: 128
   train_size: 1000
   val_size: 1000
-  temperature: 0.1
+  noise: 0.2
 
 trainer:
   max_epochs: 1000

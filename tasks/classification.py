@@ -36,7 +36,7 @@ class ClassificationICL(LightningModule):
         self.log("train/Accuracy", y_q_acc, on_step=False, on_epoch=True)
         return loss
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch, batch_idx, dataloader_idx=0):
         (x_c, y_c), (x_q, y_q), w = batch
         bsz, q_len, _ = x_q.shape
 
@@ -56,6 +56,7 @@ class ClassificationICL(LightningModule):
             self.eval()
             self.plot_model("train")
             self.plot_model("val")
+            self.plot_model("ood_val")
             self.train()
 
     @torch.inference_mode()
@@ -73,29 +74,33 @@ class ClassificationICL(LightningModule):
             dataset = self.trainer.datamodule.train_data
         elif stage == "val":
             dataset = self.trainer.datamodule.val_data
+        elif stage == "ood_val":
+            dataset = self.trainer.datamodule.ood_val_data
         else:
             raise ValueError(f"Invalid dataset: {dataset}")
 
-        (x_c, y_c), _, w = dataset.get_batch(
+        (x_c, y_c), (x_q, y_q), w = dataset.get_batch(
             n_context=dataset.max_context
         )
         y_c_oh = torch.nn.functional.one_hot(y_c, self.trainer.datamodule.train_data.y_dim).float()
-        (xx, yy), grid = make_grid(x_c)
+        (xx, yy), grid = make_grid(x_q)
         levels = np.linspace(0., 1., 10)
 
         x_c, y_c_oh, w = x_c.to(self.device), y_c_oh.to(self.device), w.to(self.device)
         x_c, y_c, y_c_oh = x_c[:n_examples], y_c[:n_examples], y_c_oh[:n_examples]
 
-        x_q = grid.unsqueeze(0).repeat(n_examples, 1, 1).to(self.device)
-        ypred, _ = self.model(x_c, y_c_oh, x_q)
+        x_reshaped = grid.unsqueeze(0).repeat(n_examples, 1, 1).to(self.device)
+        ypred, _ = self.model(x_c, y_c_oh, x_reshaped)
         ypred = torch.softmax(ypred, dim=-1)
 
         x_c, y_c, ypred = x_c.cpu(), y_c.cpu(), ypred.cpu()
+        x_q, y_q = x_q.cpu(), y_q.cpu()
         
         fig, axs = plt.subplots(1, n_examples, figsize=(4 * n_examples, 4))
         for i, ax in enumerate(axs):
             ax.contourf(xx, yy, ypred[i, :, 0].view(xx.shape), cmap='RdBu', levels=levels, vmax=1., vmin=0., label="Model")
-            ax.scatter(x_c[i, :, 0], x_c[i, :, 1], c=y_c[i, :], marker='.', label="Context", s=2)
+            ax.scatter(x_c[i, :, 0], x_c[i, :, 1], c=y_c[i, :], marker='.', label="Context", s=10)
+            ax.scatter(x_q[i, :, 0], x_q[i, :, 1], c=y_q[i, :], marker='*', label="Query", s=10)
             ax.legend(loc="upper left")
         fig.tight_layout()
 

@@ -13,14 +13,14 @@ def fig2img(fig):
     plt.close(fig)
     return img
 
-def make_grid(X):
+def make_grid(X, spaces = 100):
   device = X.device
   X = X.detach().cpu().numpy()
-  min1, max1 = X[:, 0].min() - 0.5, X[:, 0].max() + 0.5
-  min2, max2 = X[:, 1].min() - 0.5, X[:, 1].max() + 0.5
+  min1, max1 = X[:, 0].min() - 1, X[:, 0].max() + 1
+  min2, max2 = X[:, 1].min() - 1, X[:, 1].max() + 1
 
-  x1grid = np.arange(min1, max1, 0.1)
-  x2grid = np.arange(min2, max2, 0.1)
+  x1grid = np.arange(min1, max1, (max1 - min1) / spaces)
+  x2grid = np.arange(min2, max2, (max2 - min2) / spaces)
 
   xx, yy = np.meshgrid(x1grid, x2grid)
 

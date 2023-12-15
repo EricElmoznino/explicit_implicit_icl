@@ -1,22 +1,22 @@
-name: Nonlinear_Regression
+name: Linear_Classification
 
 task:
-  _target_: tasks.regression.RegressionICL
+  _target_: tasks.classification.ClassificationICL
   lr: 1e-4
   model:
     _target_: models.explicit.ExplicitModelWith
     context_model:
       _target_: models.explicit.TransformerContext
-      x_dim: 1
-      y_dim: 1
+      x_dim: 2
+      y_dim: 2
       n_features: 256
       n_heads: 4
       n_hidden: 512
       n_layers: 4
     prediction_model:
-      _target_: models.explicit.ScrambledTransformerPrediction
-      x_dim: 1
-      y_dim: 1
+      _target_: models.explicit.TransformerPrediction
+      x_dim: 2
+      y_dim: 2
       z_dim: ${.n_features}
       n_features: 256
       n_heads: 4
@@ -24,18 +24,19 @@ task:
       n_layers: 4
 
 data:
-  _target_: data.infinite_nonlinear_regression.InfiniteNonlinearRegressionDataModule
-  x_dim: 1
-  y_dim: 1
-  min_context: 3
+  _target_: data.classification.ClassificationDataModule
+  kind: linear 
+  x_dim: 2
+  y_dim: 2
+  kind_kwargs:
+    hidden_dim: 64
+    layers: 1
+  min_context: 16
   max_context: 128
-  activation: "relu"
-  layers: 1
-  hidden_dim: 64
   batch_size: 128
   train_size: 1000
   val_size: 1000
-  noise: 0.5
+  noise: 0.2
 
 trainer:
   max_epochs: 1000

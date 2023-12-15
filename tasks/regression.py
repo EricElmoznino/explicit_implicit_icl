@@ -31,7 +31,7 @@ class RegressionICL(LightningModule):
         self.log("train/MSE", y_q_loss, on_step=False, on_epoch=True)
         return loss
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch, batch_idx, dataloader_idx=0):
         (x_c, y_c), (x_q, y_q), w = batch
         y_q_pred, z = self.model(x_c, y_c, x_q)
         y_q_loss = torch.nn.functional.mse_loss(y_q_pred, y_q)
@@ -46,6 +46,7 @@ class RegressionICL(LightningModule):
             self.eval()
             self.plot_model("train")
             self.plot_model("val")
+            self.plot_model("ood_val")
             self.train()
 
     @torch.inference_mode()
@@ -63,30 +64,31 @@ class RegressionICL(LightningModule):
             dataset = self.trainer.datamodule.train_data
         elif stage == "val":
             dataset = self.trainer.datamodule.val_data
+        elif stage == "ood_val":
+            dataset = self.trainer.datamodule.ood_val_data
         else:
             raise ValueError(f"Invalid dataset: {dataset}")
 
-        (x_c, y_c), _, w = dataset.get_batch(
+        (x_c, y_c), (x_q, y_q), w = dataset.get_batch(
             n_context=dataset.max_context
         )
         x_c, y_c, w = x_c.to(self.device), y_c.to(self.device), w.to(self.device)
-        x = torch.linspace(x_c.min(), x_c.max(), 100).to(self.device)
+        x = torch.linspace(x_q.min(), x_q.max(), 100).to(self.device)
         y = dataset.function(x.view(1, -1, 1).repeat(x_c.shape[0], 1, 1), w)
 
         x_c, y_c, y = x_c[:n_examples], y_c[:n_examples], y[:n_examples]
 
-        x_q = x.view(1, -1, 1).repeat(n_examples, 1, 1).to(self.device)
-        ypred, _ = self.model(x_c, y_c, x_q)
+        x_reshaped = x.view(1, -1, 1).repeat(n_examples, 1, 1).to(self.device)
+        ypred, _ = self.model(x_c, y_c, x_reshaped)
 
-        x_c, x, y_c, y_pred, y = x_c.cpu(), x.cpu(), y_c.cpu(), ypred.cpu(), y.cpu()
-        y_c = y_c.cpu()
-        ypred = ypred.cpu()
+        x_q, y_q, x_c, x, y_c, ypred, y = x_q.cpu(), y_q.cpu(), x_c.cpu(), x.cpu(), y_c.cpu(), ypred.cpu(), y.cpu()
         
         fig, axs = plt.subplots(1, n_examples, figsize=(4 * n_examples, 4))
         for i, ax in enumerate(axs):
-            ax.scatter(x_c[i, :, 0], y_c[i, :, 0], label="Context", s=2)
             ax.plot(x, y[i, :, 0], label="True", c='black')
-            ax.plot(x, ypred[i, :, 0], label="Model", c='red')
+            ax.plot(x, ypred[i, :, 0], label="Model", c='green')
+            ax.scatter(x_c[i, :, 0], y_c[i, :, 0], label="Context", s=10, c='blue')
+            ax.scatter(x_q[i, :, 0], y_q[i, :, 0], label="Query", s=10, c='red')
             ax.set(xlabel="x", ylabel="y")
             ax.legend(loc="upper left")
         fig.tight_layout()

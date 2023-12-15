@@ -1,4 +1,4 @@
-name: Nonlinear_Classification
+name: Linear_Classification
 
 task:
   _target_: tasks.classification.ClassificationICL
@@ -13,18 +13,16 @@ task:
     n_layers: 4
 
 data:
-  _target_: data.infinite_nonlinear_classification.InfiniteNonlinearClassificationDataModule
+  _target_: data.classification.ClassificationDataModule
+  kind: linear 
   x_dim: 2
   y_dim: 2
-  min_context: 3
+  min_context: 16
   max_context: 128
-  activation: "relu"
-  layers: 1
-  hidden_dim: 64
   batch_size: 128
   train_size: 1000
   val_size: 1000
-  temperature: 0.1
+  noise: 0.2
 
 trainer:
   max_epochs: 1000

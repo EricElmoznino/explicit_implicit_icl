@@ -14,21 +14,23 @@ task:
       n_hidden: 512
       n_layers: 4
     prediction_model:
-      _target_: models.explicit.AffinePrediction
+      _target_: models.explicit.MLPPrediction
       x_dim: 1
       y_dim: 1
       z_dim: ${..context_model.n_features}
+      hidden_dim: 512
 
 data:
-  _target_: data.infinite_linear_regression.InfiniteLinearRegressionDataModule
+  _target_: data.regression.RegressionDataModule
+  kind: linear  
   x_dim: 1
   y_dim: 1
-  min_context: 3
+  min_context: 16
   max_context: 128
   batch_size: 128
   train_size: 1000
   val_size: 1000
-  noise: 0.5
+  noise: 0.2
 
 trainer:
   max_epochs: 1000

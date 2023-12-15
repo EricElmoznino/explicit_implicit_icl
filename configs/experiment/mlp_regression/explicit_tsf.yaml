@@ -1,4 +1,4 @@
-name: Nonlinear_Regression
+name: Linear_Regression
 
 task:
   _target_: tasks.regression.RegressionICL
@@ -24,18 +24,20 @@ task:
       n_layers: 4
 
 data:
-  _target_: data.infinite_nonlinear_regression.InfiniteNonlinearRegressionDataModule
+  _target_: data.regression.RegressionDataModule
+  kind: mlp  
   x_dim: 1
   y_dim: 1
-  min_context: 3
+  kind_kwargs:
+    activation: "relu"
+    layers: 1
+    hidden_dim: 64
+  min_context: 16
   max_context: 128
-  activation: "relu"
-  layers: 1
-  hidden_dim: 64
   batch_size: 128
   train_size: 1000
   val_size: 1000
-  noise: 0.5
+  noise: 0.2
 
 trainer:
   max_epochs: 1000

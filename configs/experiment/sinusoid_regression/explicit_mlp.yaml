@@ -1,38 +1,39 @@
-name: Nonlinear_Classification
+name: Linear_Regression
 
 task:
-  _target_: tasks.classification.ClassificationICL
+  _target_: tasks.regression.RegressionICL
   lr: 1e-4
   model:
     _target_: models.explicit.ExplicitModelWith
     context_model:
       _target_: models.explicit.TransformerContext
-      x_dim: 2
-      y_dim: 2
+      x_dim: 1
+      y_dim: 1
       n_features: 256
       n_heads: 4
       n_hidden: 512
       n_layers: 4
     prediction_model:
       _target_: models.explicit.MLPPrediction
-      x_dim: 2
-      y_dim: 2
+      x_dim: 1
+      y_dim: 1
       z_dim: ${..context_model.n_features}
       hidden_dim: 512
 
 data:
-  _target_: data.infinite_nonlinear_classification.InfiniteNonlinearClassificationDataModule
-  x_dim: 2
-  y_dim: 2
-  min_context: 3
+  _target_: data.regression.RegressionDataModule
+  kind: sinusoid  
+  x_dim: 1
+  y_dim: 1
+  kind_kwargs:
+    fixed_freq: False
+    n_freq: 3
+  min_context: 16
   max_context: 128
-  activation: "relu"
-  layers: 1
-  hidden_dim: 64
   batch_size: 128
   train_size: 1000
   val_size: 1000
-  temperature: 0.1
+  noise: 0.2
 
 trainer:
   max_epochs: 1000
