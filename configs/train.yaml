@@ -10,9 +10,10 @@ save: False
 
 logger:
   _target_: lightning.pytorch.loggers.WandbLogger
-  entity: null
-  name: ${experiment.name}
-  project: "Explicit-Implicit_${experiment.task_name}"
+  entity: ${wandb_account}
+  name: ${now:%Y-%m-%d}_${now:%H-%M-%S}
+  checkpoint_name: ${logger.name}
+  project: "Explicit-Implicit"
   save_dir: ${save_dir}
   offline: False
-  tags: null
+  tags: ["${experiment.name}"]

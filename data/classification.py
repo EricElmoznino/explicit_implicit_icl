@@ -16,19 +16,17 @@ from data.utils import BatchedLinear
 warnings.filterwarnings("ignore", message=".*does not have many workers.*")
 warnings.filterwarnings("ignore", message=".*`IterableDataset` has `__len__` defined.*")
 
-
-def init_weights(m, std=1.0):
+def init_weights(m, std=1.):
     if isinstance(m, BatchedLinear):
         torch.nn.init.normal_(m.weight, std=std)
         torch.nn.init.normal_(m.bias, std=std)
 
-
-class RegressionDataModule(LightningDataModule):
-    RegressionKind = Literal["polynomial", "sinusoid", "linear", "mlp"]
+class ClassificationDataModule(LightningDataModule):
+    ClassificationKind = Literal["linear", "mlp"]
 
     def __init__(
         self,
-        kind: RegressionKind,
+        kind: ClassificationKind,
         x_dim: int,
         y_dim: int,
         min_context: int,
@@ -36,48 +34,46 @@ class RegressionDataModule(LightningDataModule):
         batch_size: int = 128,
         train_size: int = 10000,
         val_size: int = 100,
-        noise: float = 0.5,
+        temperature: float = 0.1,
         kind_kwargs: dict[str, Any] = {},
     ):
         super().__init__()
         self.save_hyperparameters()
 
-        RegressionDatasetCls = {
-            "polynomial": PolynomialRegressionDataset,
-            "sinusoid": SinusoidalRegressionDataset,
-            "linear": LinearRegressionDataset,
-            "mlp": MLPRegressionDataset,
+        ClassificationDatasetCls = {
+            "linear": LinearClassificationDataset,
+            "mlp": MLPClassificationDataset,
         }[kind]
-        self.train_data = RegressionDatasetCls(
+        self.train_data = ClassificationDatasetCls(
             x_dim=x_dim,
             y_dim=y_dim,
             min_context=min_context,
             max_context=max_context,
             batch_size=batch_size,
             data_size=train_size,
-            noise=noise,
+            temperature=temperature,
             **kind_kwargs,
         )
-        self.val_data = RegressionDatasetCls(
+        self.val_data = ClassificationDatasetCls(
             x_dim=x_dim,
             y_dim=y_dim,
             min_context=min_context,
             max_context=max_context,
             batch_size=val_size,
             data_size=val_size,
-            noise=noise,
+            temperature=temperature,
             finite=True,
             **kind_kwargs,
         )
 
-        self.ood_val_data = RegressionDatasetCls(
+        self.ood_val_data = ClassificationDatasetCls(
             x_dim=x_dim,
             y_dim=y_dim,
             min_context=min_context,
             max_context=max_context,
             batch_size=val_size,
             data_size=val_size,
-            noise=noise,
+            temperature=temperature,
             finite=True,
             ood=True,
             **kind_kwargs,
@@ -87,13 +83,9 @@ class RegressionDataModule(LightningDataModule):
         return DataLoader(self.train_data, batch_size=None)
 
     def val_dataloader(self):
-        return [
-            DataLoader(self.val_data, batch_size=None),
-            DataLoader(self.ood_val_data, batch_size=None),
-        ]
+        return [DataLoader(self.val_data, batch_size=None), DataLoader(self.ood_val_data, batch_size=None)]
 
-
-class RegressionDataset(ABC, IterDataPipe):
+class ClassificationDataset(ABC, IterDataPipe):
     def __init__(
         self,
         x_dim: int,
@@ -102,9 +94,9 @@ class RegressionDataset(ABC, IterDataPipe):
         min_context: int,
         max_context: int,
         batch_size: int = 128,
-        noise: float = 0.0,
+        temperature: float = 0.1,
         ood: bool = False,
-        finite: bool = False,
+        finite: bool = False
     ) -> None:
         super().__init__()
         self.x_dim = x_dim
@@ -113,7 +105,7 @@ class RegressionDataset(ABC, IterDataPipe):
         self.max_context = max_context
         self.batch_size = batch_size
         self.data_size = data_size
-        self.noise = noise
+        self.temperature = temperature
         self.ood = ood
         self.finite = finite
 
@@ -123,19 +115,17 @@ class RegressionDataset(ABC, IterDataPipe):
             self.fixed_x_c = torch.randn(self.data_size, self.max_context, self.x_dim)
             self.fixed_x_q = torch.randn(self.data_size, self.max_context, self.x_dim)
             if self.ood:
-                self.fixed_x_q *= 5.0
+                self.fixed_x_q *= 5.
             self.fixed_params = self.sample_function_params()
             self.fixed_y_c = self.function(self.fixed_x_c, self.fixed_params)
             self.fixed_y_q = self.function(self.fixed_x_q, self.fixed_params)
-            self.fixed_y_c += self.noise * torch.randn_like(self.fixed_y_c)
-            self.fixed_y_q += self.noise * torch.randn_like(self.fixed_y_q)
 
     def sample_finite_batch(self, n_context):
-        x_c = self.fixed_x_c[: self.batch_size, :n_context]
-        x_q = self.fixed_x_q[: self.batch_size, :n_context]
-        y_c = self.fixed_y_c[: self.batch_size, :n_context]
-        y_q = self.fixed_y_q[: self.batch_size, :n_context]
-        params = self.fixed_params[: self.batch_size]
+        x_c = self.fixed_x_c[:self.batch_size, :n_context]
+        x_q = self.fixed_x_q[:self.batch_size, :n_context]
+        y_c = self.fixed_y_c[:self.batch_size, :n_context]
+        y_q = self.fixed_y_q[:self.batch_size, :n_context]
+        params = self.fixed_params[:self.batch_size]
         return (x_c, y_c), (x_q, y_q), params
 
     def sample_x(self, n_context):
@@ -160,7 +150,7 @@ class RegressionDataset(ABC, IterDataPipe):
     def get_batch(self, n_context=None):
         if n_context is None:
             n_context = np.random.randint(self.min_context, self.max_context + 1)
-
+        
         if self.finite:
             n_context = (self.min_context + self.max_context) // 2
             return self.sample_finite_batch(n_context)
@@ -168,8 +158,6 @@ class RegressionDataset(ABC, IterDataPipe):
         x_c, x_q = self.sample_x(n_context)
         params = self.function_params()
         y_c, y_q = self.function(x_c, params), self.function(x_q, params)
-        y_c += self.noise * torch.randn_like(y_c)
-        y_q += self.noise * torch.randn_like(y_q)
         return (x_c, y_c), (x_q, y_q), params
 
     def __len__(self):
@@ -179,11 +167,10 @@ class RegressionDataset(ABC, IterDataPipe):
         for _ in range(len(self)):
             yield self.get_batch()
 
-
-class LinearRegressionDataset(RegressionDataset):
+class LinearClassificationDataset(ClassificationDataset):
     def __init__(
-        self,
-        **kwargs,
+            self,
+            **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.n_params = (self.x_dim + 1) * self.y_dim
@@ -191,24 +178,24 @@ class LinearRegressionDataset(RegressionDataset):
             self.generate_finite_data()
 
     def sample_function_params(self) -> FloatTensor:
-        # Linear regression weights
+        # Linear Classification weights
         return torch.randn(self.batch_size, self.x_dim + 1, self.y_dim)
 
-    def function(self, x, w) -> FloatTensor:
+    def function(self, x, w, noise=None) -> FloatTensor:
         # x: (bsz, n_samples, x_dim)
         # w: (bsz, x_dim + 1, y_dim)
         x = torch.cat([x, torch.ones_like(x[:, :, :1])], dim=-1)
         y = torch.bmm(x, w)
+        y = torch.distributions.categorical.Categorical(logits=y / self.temperature).sample()
         return y
 
-
-class MLPRegressionDataset(RegressionDataset):
+class MLPClassificationDataset(ClassificationDataset):
     def __init__(
-        self,
-        activation: str = "relu",
-        layers: int = 1,
-        hidden_dim: int = 64,
-        **kwargs,
+            self,
+            activation: str = "relu",
+            layers: int = 1,
+            hidden_dim: int = 64,            
+            **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.layers = layers
@@ -221,19 +208,12 @@ class MLPRegressionDataset(RegressionDataset):
 
         if self.finite:
             self.generate_finite_data()
-        self.n_params = (
-            sum(p.numel() for p in self.model.parameters()) // self.batch_size
-        )
+        self.n_params = sum(p.numel() for p in self.model.parameters()) // self.batch_size
 
     def get_model(self):
-        layers = [
-            BatchedLinear(self.x_dim, self.hidden_dim, self.batch_size),
-            self.activation,
-        ]
+        layers = [BatchedLinear(self.x_dim, self.hidden_dim, self.batch_size), self.activation]
         for _ in range(self.layers - 1):
-            layers.append(
-                BatchedLinear(self.hidden_dim, self.hidden_dim, self.batch_size)
-            )
+            layers.append(BatchedLinear(self.hidden_dim, self.hidden_dim, self.batch_size))
             layers.append(self.activation)
         layers.append(BatchedLinear(self.hidden_dim, self.y_dim, self.batch_size))
         self.model = torch.nn.Sequential(*layers)
@@ -248,7 +228,7 @@ class MLPRegressionDataset(RegressionDataset):
         return w
 
     def sample_function_params(self) -> FloatTensor:
-        # Linear regression weights
+        # Linear Classification weights
         if self.model is None:
             self.get_model()
         self.model.apply(init_weights)
@@ -260,72 +240,5 @@ class MLPRegressionDataset(RegressionDataset):
             x = x.cuda()
 
         y = self.model(x)
-        return y
-
-
-class PolynomialRegressionDataset(RegressionDataset):
-    def __init__(
-        self,
-        order: int,
-        **kwargs,
-    ) -> None:
-        self.order = order
-        std = torch.linspace(1, 1 / order**2, order)
-        std = torch.cat([0.1 * torch.ones(1), std])  # Smaller y-intercepts
-        self.w_dist = torch.distributions.normal.Normal(torch.zeros(order + 1), std)
-        super().__init__(**kwargs)
-
-    def sample_function_params(self, n_samples) -> FloatTensor:
-        # Polynomial regression weights
-        return self.w_dist.rsample((n_samples,))
-
-    def function(self, x, params) -> FloatTensor:
-        x = torch.cat([x**i for i in range(self.order + 1)], dim=-1)
-        params = params.unsqueeze(-1)
-        y = torch.bmm(x, params)
-        return y
-
-
-class SinusoidalRegressionDataset(RegressionDataset):
-    def __init__(
-        self,
-        fixed_freq: bool = True,
-        n_freq: int = 3,
-        **kwargs,
-    ) -> None:
-        super().__init__(**kwargs)
-
-        self.n_freq = n_freq
-        self.fixed_freq = fixed_freq
-
-        if fixed_freq:
-            with isolate_rng():
-                torch.manual_seed(1)
-                self.freqs = torch.rand(self.x_dim, n_freq).unsqueeze(0) * 5
-
-        self.n_params = n_freq * self.x_dim
-        if not fixed_freq:
-            self.n_params *= 2
-
-        if self.finite:
-            self.generate_finite_data()
-
-    def sample_function_params(self) -> FloatTensor:
-        amplitudes = (torch.rand(self.batch_size, self.x_dim, self.n_freq) - 0.5) * 2
-        if self.fixed_freq:
-            return amplitudes
-        else:
-            freqs = torch.rand(self.batch_size, self.x_dim, self.n_freq) * 5
-            return torch.cat([amplitudes, freqs], dim=-1)
-
-    def function(self, x, params) -> FloatTensor:
-        if self.fixed_freq:
-            freq = self.freqs.to(x.device)
-            amplitudes = params
-        else:
-            amplitudes = params[:, :, : self.n_freq]
-            freq = params[:, :, self.n_freq :]
-
-        x = torch.sin(x.unsqueeze(-1) * freq.unsqueeze(1))
-        y = (x * amplitudes.unsqueeze(1)).sum(dim=-1).sum(dim=-1, keepdim=True)
+        y = torch.distributions.categorical.Categorical(logits=y / self.temperature).sample()
         return y
