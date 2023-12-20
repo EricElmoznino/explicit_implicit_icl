@@ -53,7 +53,6 @@ class TransformerContext(nn.Module):
         n_hidden,
         n_layers,
         z_dim=None,
-        cross_attention=False,
     ):
         super().__init__()
 
@@ -121,7 +120,7 @@ class TransformerPrediction(nn.Module):
         n_heads,
         n_hidden,
         n_layers,
-        cross_attention=False,
+        z_dim=None,
     ):
         super().__init__()
 
@@ -130,9 +129,7 @@ class TransformerPrediction(nn.Module):
         self.z_dim = n_features if z_dim is None else z_dim
         self.n_features = n_features
 
-        input_dim = x_dim * 64 if freq_enc else x_dim
-        self.freq_enc = FreqEncoding(64) if freq_enc else nn.Identity()
-        self.value_embedding = nn.Linear(input_dim, n_features)
+        self.value_embedding = nn.Linear(x_dim, n_features)
         if self.z_dim != n_features:
             self.context_embedding = nn.Linear(z_dim, n_features)
         else:
@@ -157,62 +154,28 @@ class TransformerPrediction(nn.Module):
                 nn.init.xavier_uniform_(p)
 
     def forward(self, z, x_q):
-        bsz, q_len, _ = x_q.shape
+        _, q_len, _ = x_q.shape
         z = z.unsqueeze(1)
         z = self.context_embedding(z) if self.context_embedding else z
         x_q = self.value_embedding(x_q)
+        src_mask = (1 - torch.eye(1 + q_len)).bool().to(x_q.device)
+        src_mask[:, 0] = False
         pred_input = torch.stack([z, x_q], dim=1)
-        if self.cross_attention:
-            mask = torch.BoolTensor(
-                [[False, True], [False, False]],
-                device=pred_input.device,
-            )
-        else:
-            mask = None
-        y_q = self.prediction_encoder(pred_input, mask=mask)[:, -1]
+        y_q = self.prediction_encoder(pred_input, mask=src_mask)[:, -1]
         y_q = self.prediction_head(y_q)
         return y_q
 
 
 class MLPPrediction(nn.Module):
-    def __init__(self, x_dim, y_dim, z_dim, hidden_dim, freq_enc: bool = False):
+    def __init__(self, x_dim, y_dim, z_dim, hidden_dim):
         super().__init__()
-        input_dim = x_dim * 64 if freq_enc else x_dim
-        self.freq_enc = FreqEncoding(64) if freq_enc else nn.Identity()
-        self.mlp = MLP(input_dim + z_dim, hidden_dim, y_dim)
+        self.mlp = MLP(x_dim + z_dim, hidden_dim, y_dim)
 
     def forward(self, z, x_q):
+        z = z.unsqueeze(1).repeat(1, x_q.shape[1], 1)
         x_q = torch.cat([z, x_q], dim=-1)
         y_q = self.mlp(x_q)
         return y_q
-
-
-class HyperMLPPrediction(nn.Module):
-    def __init__(self, x_dim, y_dim, z_dim, hidden_dims, freq_enc: bool = False):
-        super().__init__()
-        input_dim = x_dim * 64 if freq_enc else x_dim
-        self.freq_enc = FreqEncoding(64) if freq_enc else nn.Identity()
-        self.layer_sizes = [input_dim] + hidden_dims + [y_dim]
-        self.layer_weight_shapes = list(
-            zip(self.layer_sizes[:-1], self.layer_sizes[1:])
-        )
-        self.total_params = sum(
-            [inp * out + out for inp, out in self.layer_weight_shapes]
-        )
-        assert z_dim == self.total_params
-
-    def forward(self, z, x_q):
-        x = self.freq_enc(x_q)
-        i = 0
-        for layer_idx, w_shape in enumerate(self.layer_weight_shapes):
-            w_size, b_size = w_shape[0] * w_shape[1], w_shape[1]
-            w = z[:, i : i + w_size].reshape(-1, *w_shape)
-            b = z[:, i + w_size : i + w_size + b_size]
-            x = torch.bmm(x.unsqueeze(1), w).squeeze(1) + b
-            if layer_idx < len(self.layer_weight_shapes) - 1:
-                x = torch.relu(x)
-            i += w_size + b_size
-        return x
 
 
 class LinRegPrediction(nn.Module):
@@ -233,75 +196,6 @@ class LinRegPrediction(nn.Module):
             w = z
         w = w.reshape(-1, self.x_dim + 1, self.y_dim)
         y_q = x_q @ w
-        return y_q
-
-
-class ScrambledTransformerPrediction(nn.Module):
-    def __init__(
-        self,
-        x_dim,
-        y_dim,
-        z_dim,
-        n_features,
-        n_heads,
-        n_hidden,
-        n_layers,
-    ):
-        super().__init__()
-
-        self.x_dim = x_dim
-        self.y_dim = y_dim
-        self.z_dim = z_dim
-        self.n_features = n_features
-
-        self.value_embedding = nn.Linear(x_dim, n_features)
-        if z_dim != n_features:
-            self.context_embedding = nn.Linear(z_dim, n_features)
-        else:
-            self.context_embedding = None
-        self.prediction_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=n_features,
-                nhead=n_heads,
-                dim_feedforward=n_hidden,
-                dropout=0.0,
-                batch_first=True,
-            ),
-            num_layers=n_layers,
-        )
-        self.prediction_head = nn.Linear(n_features, self.y_dim)
-
-        self.init_weights()
-
-    def init_weights(self):
-        for p in self.prediction_encoder.parameters():
-            if p.dim() > 1:
-                nn.init.xavier_uniform_(p)
-
-    def forward(self, z, x_q):
-        bsz, q_len, _ = x_q.shape
-        z = z.unsqueeze(1)
-        z = self.context_embedding(z) if self.context_embedding else z
-        x_q = self.value_embedding(x_q)
-
-        src_mask = (1 - torch.eye(1 + q_len)).bool().to(x_q.device)
-        src_mask[:, 0] = False
-
-        pred_input = torch.cat([z, x_q], dim=1)
-        y_q = self.prediction_encoder(pred_input, mask=src_mask)[:, -q_len:]
-        y_q = self.prediction_head(y_q)
-        return y_q
-
-
-class MLPPrediction(nn.Module):
-    def __init__(self, x_dim, y_dim, z_dim, hidden_dim):
-        super().__init__()
-        self.mlp = MLP(x_dim + z_dim, hidden_dim, y_dim)
-
-    def forward(self, z, x_q):
-        z = z.unsqueeze(1).repeat(1, x_q.shape[1], 1)
-        x_q = torch.cat([z, x_q], dim=-1)
-        y_q = self.mlp(x_q)
         return y_q
 
 
