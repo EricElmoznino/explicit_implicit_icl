@@ -160,8 +160,8 @@ class TransformerPrediction(nn.Module):
         x_q = self.value_embedding(x_q)
         src_mask = (1 - torch.eye(1 + q_len)).bool().to(x_q.device)
         src_mask[:, 0] = False
-        pred_input = torch.stack([z, x_q], dim=1)
-        y_q = self.prediction_encoder(pred_input, mask=src_mask)[:, -1]
+        pred_input = torch.cat([z, x_q], dim=1)
+        y_q = self.prediction_encoder(pred_input, mask=src_mask)[:, -q_len:]
         y_q = self.prediction_head(y_q)
         return y_q
 
