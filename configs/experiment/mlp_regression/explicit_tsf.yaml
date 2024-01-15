@@ -43,3 +43,10 @@ trainer:
   max_epochs: 1000
 
 callbacks:
+  - _target_: lightning.pytorch.callbacks.ModelCheckpoint
+    monitor: "val/MSE/dataloader_idx_0"
+    mode: "min"
+    save_last: True
+    dirpath: ${save_dir}/checkpoints/${logger.name}
+    filename: "epoch={epoch:03d}"
+    auto_insert_metric_name: True

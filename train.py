@@ -22,10 +22,6 @@ def train(cfg):
         **cfg.experiment.trainer,
     )
     trainer.fit(model=task, datamodule=datamodule)
-    if cfg.save:
-        trainer.save_checkpoint(
-            f"{cfg.save_dir}/checkpoints/{cfg.experiment.task_name}/{cfg.experiment.name} - seed={cfg.seed}.ckpt"
-        )
 
 
 if __name__ == "__main__":
