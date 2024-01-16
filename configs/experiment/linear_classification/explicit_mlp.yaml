@@ -1,4 +1,4 @@
-name: Linear_Classification
+name: Linear-Classification_Explicit-MLP
 
 task:
   _target_: tasks.classification.ClassificationICL
@@ -31,6 +31,7 @@ data:
   train_size: 1000
   val_size: 1000
   noise: 0.2
+  ood_styles: ["far", "wide"]
 
 trainer:
   max_epochs: 1000

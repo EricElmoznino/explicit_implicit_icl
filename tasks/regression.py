@@ -2,7 +2,8 @@ import torch
 from lightning import LightningModule
 from matplotlib import pyplot as plt
 from models.implicit import ImplicitModel
-from models.explicit import ExplicitModel, ExplicitModelWith, TransformerContext
+from models.explicit import ExplicitModel, ExplicitModelWith, SinRegPrediction
+from data.regression import SinusoidalRegressionDataset
 from tasks.utils import fig2img
 
 
@@ -35,18 +36,31 @@ class RegressionICL(LightningModule):
         (x_c, y_c), (x_q, y_q), w = batch
         y_q_pred, z = self.model(x_c, y_c, x_q)
         y_q_loss = torch.nn.functional.mse_loss(y_q_pred, y_q)
+        val_style = list(self.trainer.datamodule.val_data.keys())[dataloader_idx]
         if z is not None:
             w_pred = self.w_predictor(z).view(*w.shape)
             w_loss = torch.nn.functional.mse_loss(w_pred, w)
-            self.log("val/w_loss", w_loss, on_step=False, on_epoch=True)
-        self.log("val/MSE", y_q_loss, on_step=False, on_epoch=True)
+            self.log(
+                f"val/{val_style}_w_loss",
+                w_loss,
+                on_step=False,
+                on_epoch=True,
+                add_dataloader_idx=False,
+            )
+        self.log(
+            f"val/{val_style}_MSE",
+            y_q_loss,
+            on_step=False,
+            on_epoch=True,
+            add_dataloader_idx=False,
+        )
 
     def on_train_epoch_start(self):
         if self.trainer.current_epoch % 10 == 0:
             self.eval()
             self.plot_model("train")
-            self.plot_model("val")
-            self.plot_model("ood_val")
+            for val_style in self.trainer.datamodule.val_data.keys():
+                self.plot_model(val_style)
             self.train()
 
     @torch.inference_mode()
@@ -62,12 +76,9 @@ class RegressionICL(LightningModule):
             return
         if stage == "train":
             dataset = self.trainer.datamodule.train_data
-        elif stage == "val":
-            dataset = self.trainer.datamodule.val_data
-        elif stage == "ood_val":
-            dataset = self.trainer.datamodule.ood_val_data
         else:
-            raise ValueError(f"Invalid dataset: {dataset}")
+            dataset = self.trainer.datamodule.val_data[stage]
+            stage = f"val_{stage}"
 
         (x_c, y_c), (x_q, y_q), w = dataset.get_batch(n_context=dataset.max_context)
         x_c, y_c = x_c.to(self.device), y_c.to(self.device)
@@ -104,7 +115,7 @@ class RegressionICL(LightningModule):
         self.logger.log_image(f"examples/{stage}", [fig2img(fig)])
 
     def configure_optimizers(self):
-        if self.trainer.datamodule.val_data.fixed_params is not None:
+        if self.trainer.datamodule.val_data["iid"].fixed_params is not None:
             if isinstance(self.model, ExplicitModelWith):
                 self.w_predictor = torch.nn.Linear(
                     self.model.context_model.n_features,
@@ -120,3 +131,15 @@ class RegressionICL(LightningModule):
                 }
             ]
         return torch.optim.Adam(param_groups, lr=self.hparams.lr)
+
+    def on_validation_start(self):
+        # If we're using a known sinusoidal prediction model with fixed frequencies,
+        # we need to get the ground-truth frequencies from the dataset
+        data = self.trainer.datamodule.train_data
+        if (
+            isinstance(self.model, ExplicitModelWith)
+            and isinstance(self.model.prediction_model, SinRegPrediction)
+            and isinstance(data, SinusoidalRegressionDataset)
+            and data.fixed_freq
+        ):
+            self.model.prediction_model.set_freqs(data.freqs.to(self.device))

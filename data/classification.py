@@ -16,10 +16,12 @@ from data.utils import BatchedLinear
 warnings.filterwarnings("ignore", message=".*does not have many workers.*")
 warnings.filterwarnings("ignore", message=".*`IterableDataset` has `__len__` defined.*")
 
-def init_weights(m, std=1.):
+
+def init_weights(m, std=1.0):
     if isinstance(m, BatchedLinear):
         torch.nn.init.normal_(m.weight, std=std)
         torch.nn.init.normal_(m.bias, std=std)
+
 
 class ClassificationDataModule(LightningDataModule):
     ClassificationKind = Literal["linear", "mlp"]
@@ -35,6 +37,7 @@ class ClassificationDataModule(LightningDataModule):
         train_size: int = 10000,
         val_size: int = 100,
         temperature: float = 0.1,
+        ood_styles: tuple[str] | None = ["far", "wide"],
         kind_kwargs: dict[str, Any] = {},
     ):
         super().__init__()
@@ -54,36 +57,42 @@ class ClassificationDataModule(LightningDataModule):
             temperature=temperature,
             **kind_kwargs,
         )
-        self.val_data = ClassificationDatasetCls(
-            x_dim=x_dim,
-            y_dim=y_dim,
-            min_context=min_context,
-            max_context=max_context,
-            batch_size=val_size,
-            data_size=val_size,
-            temperature=temperature,
-            finite=True,
-            **kind_kwargs,
-        )
-
-        self.ood_val_data = ClassificationDatasetCls(
-            x_dim=x_dim,
-            y_dim=y_dim,
-            min_context=min_context,
-            max_context=max_context,
-            batch_size=val_size,
-            data_size=val_size,
-            temperature=temperature,
-            finite=True,
-            ood=True,
-            **kind_kwargs,
-        )
+        self.val_data = {
+            "iid": ClassificationDatasetCls(
+                x_dim=x_dim,
+                y_dim=y_dim,
+                min_context=min_context,
+                max_context=max_context,
+                batch_size=val_size,
+                data_size=val_size,
+                temperature=temperature,
+                finite=True,
+                ood=False,
+                **kind_kwargs,
+            )
+        }
+        if ood_styles is not None:
+            for style in ood_styles:
+                self.val_data[style] = ClassificationDatasetCls(
+                    x_dim=x_dim,
+                    y_dim=y_dim,
+                    min_context=min_context,
+                    max_context=max_context,
+                    batch_size=val_size,
+                    data_size=val_size,
+                    temperature=temperature,
+                    finite=True,
+                    ood=True,
+                    ood_style=style,
+                    **kind_kwargs,
+                )
 
     def train_dataloader(self):
         return DataLoader(self.train_data, batch_size=None)
 
     def val_dataloader(self):
-        return [DataLoader(self.val_data, batch_size=None), DataLoader(self.ood_val_data, batch_size=None)]
+        return [DataLoader(v, batch_size=None) for v in self.val_data.values()]
+
 
 class ClassificationDataset(ABC, IterDataPipe):
     def __init__(
@@ -96,7 +105,9 @@ class ClassificationDataset(ABC, IterDataPipe):
         batch_size: int = 128,
         temperature: float = 0.1,
         ood: bool = False,
-        finite: bool = False
+        context_style: str = "same",
+        ood_style: str = "far",
+        finite: bool = False,
     ) -> None:
         super().__init__()
         self.x_dim = x_dim
@@ -107,6 +118,8 @@ class ClassificationDataset(ABC, IterDataPipe):
         self.data_size = data_size
         self.temperature = temperature
         self.ood = ood
+        self.context_style = context_style
+        self.ood_style = ood_style
         self.finite = finite
 
     def generate_finite_data(self):
@@ -115,22 +128,33 @@ class ClassificationDataset(ABC, IterDataPipe):
             self.fixed_x_c = torch.randn(self.data_size, self.max_context, self.x_dim)
             self.fixed_x_q = torch.randn(self.data_size, self.max_context, self.x_dim)
             if self.ood:
-                self.fixed_x_q *= 5.
+                if self.ood_style == "wide":
+                    self.fixed_x_q *= 3.0
+                elif self.ood_style == "far":
+                    direction = torch.randn_like(self.fixed_x_q)
+                    self.fixed_x_q = (
+                        self.fixed_x_q * 0.1
+                        + 3.0 * direction / direction.norm(dim=-1, keepdim=True)
+                    )
+            self.fixed_params = self.sample_function_params()
             self.fixed_params = self.sample_function_params()
             self.fixed_y_c = self.function(self.fixed_x_c, self.fixed_params)
             self.fixed_y_q = self.function(self.fixed_x_q, self.fixed_params)
 
     def sample_finite_batch(self, n_context):
-        x_c = self.fixed_x_c[:self.batch_size, :n_context]
-        x_q = self.fixed_x_q[:self.batch_size, :n_context]
-        y_c = self.fixed_y_c[:self.batch_size, :n_context]
-        y_q = self.fixed_y_q[:self.batch_size, :n_context]
-        params = self.fixed_params[:self.batch_size]
+        x_c = self.fixed_x_c[: self.batch_size, :n_context]
+        x_q = self.fixed_x_q[: self.batch_size, :n_context]
+        y_c = self.fixed_y_c[: self.batch_size, :n_context]
+        y_q = self.fixed_y_q[: self.batch_size, :n_context]
+        params = self.fixed_params[: self.batch_size]
         return (x_c, y_c), (x_q, y_q), params
 
     def sample_x(self, n_context):
         x_c = torch.randn(self.batch_size, n_context, self.x_dim)
-        x_q = torch.randn(self.batch_size, n_context, self.x_dim)
+        if self.context_style == "same":
+            x_q = torch.randn(self.batch_size, n_context, self.x_dim)
+        else:
+            x_q = x_c + 0.1 * torch.randn_like(x_c)
         return x_c, x_q
 
     @abstractmethod
@@ -150,7 +174,7 @@ class ClassificationDataset(ABC, IterDataPipe):
     def get_batch(self, n_context=None):
         if n_context is None:
             n_context = np.random.randint(self.min_context, self.max_context + 1)
-        
+
         if self.finite:
             n_context = (self.min_context + self.max_context) // 2
             return self.sample_finite_batch(n_context)
@@ -167,10 +191,11 @@ class ClassificationDataset(ABC, IterDataPipe):
         for _ in range(len(self)):
             yield self.get_batch()
 
+
 class LinearClassificationDataset(ClassificationDataset):
     def __init__(
-            self,
-            **kwargs,
+        self,
+        **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.n_params = (self.x_dim + 1) * self.y_dim
@@ -186,16 +211,19 @@ class LinearClassificationDataset(ClassificationDataset):
         # w: (bsz, x_dim + 1, y_dim)
         x = torch.cat([x, torch.ones_like(x[:, :, :1])], dim=-1)
         y = torch.bmm(x, w)
-        y = torch.distributions.categorical.Categorical(logits=y / self.temperature).sample()
+        y = torch.distributions.categorical.Categorical(
+            logits=y / self.temperature
+        ).sample()
         return y
+
 
 class MLPClassificationDataset(ClassificationDataset):
     def __init__(
-            self,
-            activation: str = "relu",
-            layers: int = 1,
-            hidden_dim: int = 64,            
-            **kwargs,
+        self,
+        activation: str = "relu",
+        layers: int = 1,
+        hidden_dim: int = 64,
+        **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.layers = layers
@@ -208,12 +236,19 @@ class MLPClassificationDataset(ClassificationDataset):
 
         if self.finite:
             self.generate_finite_data()
-        self.n_params = sum(p.numel() for p in self.model.parameters()) // self.batch_size
+        self.n_params = (
+            sum(p.numel() for p in self.model.parameters()) // self.batch_size
+        )
 
     def get_model(self):
-        layers = [BatchedLinear(self.x_dim, self.hidden_dim, self.batch_size), self.activation]
+        layers = [
+            BatchedLinear(self.x_dim, self.hidden_dim, self.batch_size),
+            self.activation,
+        ]
         for _ in range(self.layers - 1):
-            layers.append(BatchedLinear(self.hidden_dim, self.hidden_dim, self.batch_size))
+            layers.append(
+                BatchedLinear(self.hidden_dim, self.hidden_dim, self.batch_size)
+            )
             layers.append(self.activation)
         layers.append(BatchedLinear(self.hidden_dim, self.y_dim, self.batch_size))
         self.model = torch.nn.Sequential(*layers)
@@ -222,7 +257,7 @@ class MLPClassificationDataset(ClassificationDataset):
 
     def get_parameters(self):
         w = []
-        for name, param in self.model.named_parameters():
+        for _, param in self.model.named_parameters():
             w.append(param.view(self.batch_size, -1))
         w = torch.cat(w, dim=-1)
         return w
@@ -240,5 +275,7 @@ class MLPClassificationDataset(ClassificationDataset):
             x = x.cuda()
 
         y = self.model(x)
-        y = torch.distributions.categorical.Categorical(logits=y / self.temperature).sample()
+        y = torch.distributions.categorical.Categorical(
+            logits=y / self.temperature
+        ).sample()
         return y

@@ -37,6 +37,7 @@ class RegressionDataModule(LightningDataModule):
         train_size: int = 10000,
         val_size: int = 100,
         noise: float = 0.5,
+        ood_styles: tuple[str] | None = ["far", "wide"],
         kind_kwargs: dict[str, Any] = {},
     ):
         super().__init__()
@@ -59,39 +60,41 @@ class RegressionDataModule(LightningDataModule):
             noise=noise,
             **kind_kwargs,
         )
-        self.val_data = RegressionDatasetCls(
-            x_dim=x_dim,
-            y_dim=y_dim,
-            min_context=min_context,
-            max_context=max_context,
-            batch_size=val_size,
-            data_size=val_size,
-            noise=noise,
-            finite=True,
-            **kind_kwargs,
-        )
-
-        self.ood_val_data = RegressionDatasetCls(
-            x_dim=x_dim,
-            y_dim=y_dim,
-            min_context=min_context,
-            max_context=max_context,
-            batch_size=val_size,
-            data_size=val_size,
-            noise=noise,
-            finite=True,
-            ood=True,
-            **kind_kwargs,
-        )
+        self.val_data = {
+            "iid": RegressionDatasetCls(
+                x_dim=x_dim,
+                y_dim=y_dim,
+                min_context=min_context,
+                max_context=max_context,
+                batch_size=val_size,
+                data_size=val_size,
+                noise=noise,
+                finite=True,
+                ood=False,
+                **kind_kwargs,
+            )
+        }
+        if ood_styles is not None:
+            for style in ood_styles:
+                self.val_data[style] = RegressionDatasetCls(
+                    x_dim=x_dim,
+                    y_dim=y_dim,
+                    min_context=min_context,
+                    max_context=max_context,
+                    batch_size=val_size,
+                    data_size=val_size,
+                    noise=noise,
+                    finite=True,
+                    ood=True,
+                    ood_style=style,
+                    **kind_kwargs,
+                )
 
     def train_dataloader(self):
         return DataLoader(self.train_data, batch_size=None)
 
     def val_dataloader(self):
-        return [
-            DataLoader(self.val_data, batch_size=None),
-            DataLoader(self.ood_val_data, batch_size=None),
-        ]
+        return [DataLoader(v, batch_size=None) for v in self.val_data.values()]
 
 
 class RegressionDataset(ABC, IterDataPipe):
@@ -105,8 +108,8 @@ class RegressionDataset(ABC, IterDataPipe):
         batch_size: int = 128,
         noise: float = 0.0,
         ood: bool = False,
-        context_style: str = 'same',
-        ood_style: str = 'far',
+        context_style: str = "same",
+        ood_style: str = "far",
         finite: bool = False,
     ) -> None:
         super().__init__()
@@ -118,9 +121,9 @@ class RegressionDataset(ABC, IterDataPipe):
         self.data_size = data_size
         self.noise = noise
         self.ood = ood
-        self.finite = finite
         self.context_style = context_style
         self.ood_style = ood_style
+        self.finite = finite
 
     def generate_finite_data(self):
         with isolate_rng():
@@ -128,11 +131,14 @@ class RegressionDataset(ABC, IterDataPipe):
             self.fixed_x_c = torch.randn(self.data_size, self.max_context, self.x_dim)
             self.fixed_x_q = torch.randn(self.data_size, self.max_context, self.x_dim)
             if self.ood:
-                if self.ood_style == 'wide':
+                if self.ood_style == "wide":
                     self.fixed_x_q *= 3.0
-                elif self.ood_style == 'far':
+                elif self.ood_style == "far":
                     direction = torch.randn_like(self.fixed_x_q)
-                    self.fixed_x_q = self.fixed_x_q * 0.1 + 3. * direction / direction.norm(dim=-1, keepdim=True)
+                    self.fixed_x_q = (
+                        self.fixed_x_q * 0.1
+                        + 3.0 * direction / direction.norm(dim=-1, keepdim=True)
+                    )
             self.fixed_params = self.sample_function_params()
             self.fixed_y_c = self.function(self.fixed_x_c, self.fixed_params)
             self.fixed_y_q = self.function(self.fixed_x_q, self.fixed_params)
@@ -152,7 +158,7 @@ class RegressionDataset(ABC, IterDataPipe):
 
     def sample_x(self, n_context):
         x_c = torch.randn(self.batch_size, n_context, self.x_dim)
-        if self.context_style == 'same':
+        if self.context_style == "same":
             x_q = torch.randn(self.batch_size, n_context, self.x_dim)
         else:
             x_q = x_c + 0.1 * torch.randn_like(x_c)
@@ -345,22 +351,23 @@ class SinusoidalRegressionDataset(RegressionDataset):
         y = (x * amplitudes.unsqueeze(1)).sum(dim=-1).sum(dim=-1, keepdim=True)
         return y
 
+
 class GPRegressionDataset(RegressionDataset):
     def __init__(
         self,
-        kernel: str = 'RBF',
+        kernel: str = "RBF",
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
 
-        assert(self.x_dim == 1)
+        assert self.x_dim == 1
         self.n_params = None
 
-        if kernel == 'RBF':
+        if kernel == "RBF":
             self.kernel = RBFKernel()
-        elif kernel == 'Matern':
+        elif kernel == "Matern":
             self.kernel = Matern52Kernel()
-        elif kernel == 'Periodic':
+        elif kernel == "Periodic":
             self.kernel = PeriodicKernel()
 
         if self.finite:
@@ -370,27 +377,29 @@ class GPRegressionDataset(RegressionDataset):
         return None
 
     def function(self, x, params=None) -> FloatTensor:
-        cov = self.kernel(x)  
+        cov = self.kernel(x)
         mean = torch.zeros(x.shape[:2], device=x.device)
         y = MultivariateNormal(mean, cov).rsample().unsqueeze(-1)
         return y
-    
+
     def generate_finite_data(self):
         with isolate_rng():
             torch.manual_seed(0)
             self.fixed_x = torch.randn(self.data_size, 2 * self.max_context, self.x_dim)
             if self.ood:
-                if self.ood_style == 'wide':
-                    self.fixed_x[:, self.max_context:] *= 3.0
-                elif self.ood_style == 'far':
-                    direction = torch.randn_like(self.fixed_x[:, self.max_context:])
-                    self.fixed_x[:, self.max_context:] = self.fixed_x[:, self.max_context:] * 0.1 + 3. * direction / direction.norm(dim=-1, keepdim=True)
+                if self.ood_style == "wide":
+                    self.fixed_x[:, self.max_context :] *= 3.0
+                elif self.ood_style == "far":
+                    direction = torch.randn_like(self.fixed_x[:, self.max_context :])
+                    self.fixed_x[:, self.max_context :] = self.fixed_x[
+                        :, self.max_context :
+                    ] * 0.1 + 3.0 * direction / direction.norm(dim=-1, keepdim=True)
             self.fixed_y = self.function(self.fixed_x)
 
-            self.fixed_x_c = self.fixed_x[:, :self.max_context]
-            self.fixed_x_q = self.fixed_x[:, self.max_context:]
-            self.fixed_y_c = self.fixed_y[:, :self.max_context]
-            self.fixed_y_q = self.fixed_y[:, self.max_context:]
+            self.fixed_x_c = self.fixed_x[:, : self.max_context]
+            self.fixed_x_q = self.fixed_x[:, self.max_context :]
+            self.fixed_y_c = self.fixed_y[:, : self.max_context]
+            self.fixed_y_q = self.fixed_y[:, self.max_context :]
             self.fixed_params = None
 
     def get_batch(self, n_context=None):

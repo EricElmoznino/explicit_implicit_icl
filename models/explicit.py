@@ -220,6 +220,45 @@ class AffinePrediction(nn.Module):
         return y_q
 
 
+class SinRegPrediction(nn.Module):
+    def __init__(self, x_dim, z_dim, n_freq, fixed_freq):
+        super().__init__()
+        self.fixed_freq = fixed_freq
+        self.n_freq = n_freq
+        self.x_dim = x_dim
+        target_zdim = x_dim * n_freq if fixed_freq else 2 * x_dim * n_freq
+        if z_dim != target_zdim:
+            self.z_encoder = nn.Linear(z_dim, target_zdim)
+        else:
+            self.z_encoder = None
+        self.freqs = None
+
+    def set_freqs(self, freqs):
+        assert self.fixed_freq
+        self.freqs = freqs
+
+    def forward(self, z, x_q):
+        if self.fixed_freq:
+            assert self.freqs is not None
+            amplitudes = self.z_encoder(z) if self.z_encoder else z
+            amplitudes = amplitudes.view(-1, self.x_dim, self.n_freq)
+            freqs = self.freqs.expand(z.shape[0], -1, -1)
+        else:
+            amplitudes, freqs = torch.split(
+                self.z_encoder(z) if self.z_encoder else z,
+                self.x_dim * self.n_freq,
+                dim=-1,
+            )
+            amplitudes, freqs = (
+                amplitudes.view(-1, self.x_dim, self.n_freq),
+                freqs.view(-1, self.x_dim, self.n_freq),
+            )
+        x = torch.sin(torch.einsum("bqd,bdf->bqdf", x_q, freqs))
+        y = torch.einsum("bqdf,bdf->bq", x, amplitudes)
+        y = y.unsqueeze(-1)
+        return y
+
+
 class ScrambledTransformerPrediction(nn.Module):
     def __init__(
         self,

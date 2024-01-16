@@ -1,4 +1,4 @@
-name: Linear_Regression
+name: GP-Regression_Implicit
 
 task:
   _target_: tasks.regression.RegressionICL
@@ -24,13 +24,14 @@ data:
   batch_size: 128
   train_size: 1000
   val_size: 1000
+  ood_styles: ["far", "wide"]
 
 trainer:
   max_epochs: 1000
 
 callbacks:
   - _target_: lightning.pytorch.callbacks.ModelCheckpoint
-    monitor: "val/MSE/dataloader_idx_0"
+    monitor: "val/iid_MSE"
     mode: "min"
     save_last: True
     dirpath: ${save_dir}/checkpoints/${logger.name}

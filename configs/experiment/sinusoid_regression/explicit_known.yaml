@@ -1,4 +1,4 @@
-name: Linear-Regression_Explicit-Transformer
+name: Sinusoid-Regression_Explicit-Known
 
 task:
   _target_: tasks.regression.RegressionICL
@@ -14,20 +14,20 @@ task:
       n_hidden: 512
       n_layers: 4
     prediction_model:
-      _target_: models.explicit.TransformerPrediction
-      x_dim: 1
-      y_dim: 1
-      z_dim: ${.n_features}
-      n_features: 256
-      n_heads: 4
-      n_hidden: 512
-      n_layers: 4
+      _target_: models.explicit.SinRegPrediction
+      x_dim: ${..context_model.x_dim}
+      z_dim: ${..context_model.n_features}
+      n_freq: ${....data.kind_kwargs.n_freq}
+      fixed_freq: ${....data.kind_kwargs.fixed_freq}
 
 data:
   _target_: data.regression.RegressionDataModule
-  kind: linear  
+  kind: sinusoid  
   x_dim: 1
   y_dim: 1
+  kind_kwargs:
+    fixed_freq: False
+    n_freq: 3
   min_context: 16
   max_context: 128
   batch_size: 128

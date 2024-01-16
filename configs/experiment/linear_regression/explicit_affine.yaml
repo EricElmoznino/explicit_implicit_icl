@@ -1,4 +1,4 @@
-name: Linear_Regression
+name: Linear-Regression_Explicit-Affine
 
 task:
   _target_: tasks.regression.RegressionICL
@@ -30,13 +30,14 @@ data:
   train_size: 1000
   val_size: 1000
   noise: 0.2
+  ood_styles: ["far", "wide"]
 
 trainer:
   max_epochs: 1000
 
 callbacks:
   - _target_: lightning.pytorch.callbacks.ModelCheckpoint
-    monitor: "val/MSE/dataloader_idx_0"
+    monitor: "val/iid_MSE"
     mode: "min"
     save_last: True
     dirpath: ${save_dir}/checkpoints/${logger.name}

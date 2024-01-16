@@ -1,4 +1,4 @@
-name: Linear_Regression
+name: Sinusoid-Regression_Explicit-Transformer
 
 task:
   _target_: tasks.regression.RegressionICL
@@ -29,7 +29,7 @@ data:
   x_dim: 1
   y_dim: 1
   kind_kwargs:
-    fixed_freq: False
+    fixed_freq: True
     n_freq: 3
   min_context: 16
   max_context: 128
@@ -37,13 +37,14 @@ data:
   train_size: 1000
   val_size: 1000
   noise: 0.2
+  ood_styles: ["far", "wide"]
 
 trainer:
   max_epochs: 1000
 
 callbacks:
   - _target_: lightning.pytorch.callbacks.ModelCheckpoint
-    monitor: "val/MSE/dataloader_idx_0"
+    monitor: "val/iid_MSE"
     mode: "min"
     save_last: True
     dirpath: ${save_dir}/checkpoints/${logger.name}
