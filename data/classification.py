@@ -37,6 +37,7 @@ class ClassificationDataModule(LightningDataModule):
         train_size: int = 10000,
         val_size: int = 100,
         temperature: float = 0.1,
+        context_style: str = "same",
         ood_styles: tuple[str] | None = ["far", "wide"],
         kind_kwargs: dict[str, Any] = {},
     ):
@@ -55,6 +56,7 @@ class ClassificationDataModule(LightningDataModule):
             batch_size=batch_size,
             data_size=train_size,
             temperature=temperature,
+            context_style=context_style,
             **kind_kwargs,
         )
         self.val_data = {
@@ -66,6 +68,7 @@ class ClassificationDataModule(LightningDataModule):
                 batch_size=val_size,
                 data_size=val_size,
                 temperature=temperature,
+                context_style=context_style,
                 finite=True,
                 ood=False,
                 **kind_kwargs,
@@ -81,6 +84,7 @@ class ClassificationDataModule(LightningDataModule):
                     batch_size=val_size,
                     data_size=val_size,
                     temperature=temperature,
+                    context_style=context_style,
                     finite=True,
                     ood=True,
                     ood_style=style,
@@ -153,8 +157,10 @@ class ClassificationDataset(ABC, IterDataPipe):
         x_c = torch.randn(self.batch_size, n_context, self.x_dim)
         if self.context_style == "same":
             x_q = torch.randn(self.batch_size, n_context, self.x_dim)
-        else:
+        elif self.context_style == "near":
             x_q = x_c + 0.1 * torch.randn_like(x_c)
+        else:
+            raise ValueError("Invalid context style")
         return x_c, x_q
 
     @abstractmethod
