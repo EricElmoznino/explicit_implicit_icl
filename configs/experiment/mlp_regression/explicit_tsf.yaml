@@ -38,6 +38,7 @@ data:
   train_size: 1000
   val_size: 1000
   noise: 0.2
+  context_style: "same"
   ood_styles: ["far", "wide"]
 
 trainer:
