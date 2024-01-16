@@ -1,4 +1,4 @@
-name: Sinusoid-Regression_Implicit
+tags: ["sinusoid-regression", "implicit"]
 
 task:
   _target_: tasks.regression.RegressionICL

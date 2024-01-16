@@ -1,4 +1,4 @@
-name: MLP-Regression_Implicit
+tags: ["mlp-regression", "implicit"]
 
 task:
   _target_: tasks.regression.RegressionICL

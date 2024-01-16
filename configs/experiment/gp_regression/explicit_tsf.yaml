@@ -1,4 +1,4 @@
-name: GP-Regression_Explicit-Transformer
+tags: ["gp-regression", "explicit-transformer"]
 
 task:
   _target_: tasks.regression.RegressionICL

@@ -1,4 +1,4 @@
-name: Sinusoid-Regression_Explicit-MLP
+tags: ["sinusoid-regression", "explicit-mlp"]
 
 task:
   _target_: tasks.regression.RegressionICL

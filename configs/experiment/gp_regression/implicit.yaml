@@ -1,4 +1,4 @@
-name: GP-Regression_Implicit
+tags: ["gp-regression", "implicit"]
 
 task:
   _target_: tasks.regression.RegressionICL

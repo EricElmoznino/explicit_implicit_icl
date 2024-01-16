@@ -1,4 +1,4 @@
-name: Linear-Classification_Explicit-Transformer
+tags: ["linear-classification", "explicit-transformer"]
 
 task:
   _target_: tasks.classification.ClassificationICL

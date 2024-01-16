@@ -1,4 +1,4 @@
-name: Linear-Regression_Explicit-ScrambledTransformer
+tags: ["linear-regression", "explicit-scrambled_transformer"]
 
 task:
   _target_: tasks.regression.RegressionICL
