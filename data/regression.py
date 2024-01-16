@@ -105,6 +105,8 @@ class RegressionDataset(ABC, IterDataPipe):
         batch_size: int = 128,
         noise: float = 0.0,
         ood: bool = False,
+        context_style: str = 'same',
+        ood_style: str = 'far',
         finite: bool = False,
     ) -> None:
         super().__init__()
@@ -117,6 +119,8 @@ class RegressionDataset(ABC, IterDataPipe):
         self.noise = noise
         self.ood = ood
         self.finite = finite
+        self.context_style = context_style
+        self.ood_style = ood_style
 
     def generate_finite_data(self):
         with isolate_rng():
@@ -124,7 +128,11 @@ class RegressionDataset(ABC, IterDataPipe):
             self.fixed_x_c = torch.randn(self.data_size, self.max_context, self.x_dim)
             self.fixed_x_q = torch.randn(self.data_size, self.max_context, self.x_dim)
             if self.ood:
-                self.fixed_x_q *= 5.0
+                if self.ood_style == 'wide':
+                    self.fixed_x_q *= 3.0
+                elif self.ood_style == 'far':
+                    direction = torch.randn_like(self.fixed_x_q)
+                    self.fixed_x_q = self.fixed_x_q * 0.1 + 3. * direction / direction.norm(dim=-1, keepdim=True)
             self.fixed_params = self.sample_function_params()
             self.fixed_y_c = self.function(self.fixed_x_c, self.fixed_params)
             self.fixed_y_q = self.function(self.fixed_x_q, self.fixed_params)
@@ -144,7 +152,10 @@ class RegressionDataset(ABC, IterDataPipe):
 
     def sample_x(self, n_context):
         x_c = torch.randn(self.batch_size, n_context, self.x_dim)
-        x_q = torch.randn(self.batch_size, n_context, self.x_dim)
+        if self.context_style == 'same':
+            x_q = torch.randn(self.batch_size, n_context, self.x_dim)
+        else:
+            x_q = x_c + 0.1 * torch.randn_like(x_c)
         return x_c, x_q
 
     @abstractmethod
@@ -369,7 +380,11 @@ class GPRegressionDataset(RegressionDataset):
             torch.manual_seed(0)
             self.fixed_x = torch.randn(self.data_size, 2 * self.max_context, self.x_dim)
             if self.ood:
-                self.fixed_x[:, self.max_context:] *= 5.0
+                if self.ood_style == 'wide':
+                    self.fixed_x[:, self.max_context:] *= 3.0
+                elif self.ood_style == 'far':
+                    direction = torch.randn_like(self.fixed_x[:, self.max_context:])
+                    self.fixed_x[:, self.max_context:] = self.fixed_x[:, self.max_context:] * 0.1 + 3. * direction / direction.norm(dim=-1, keepdim=True)
             self.fixed_y = self.function(self.fixed_x)
 
             self.fixed_x_c = self.fixed_x[:, :self.max_context]
