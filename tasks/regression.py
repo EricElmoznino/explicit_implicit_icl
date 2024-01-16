@@ -3,7 +3,7 @@ from lightning import LightningModule
 from matplotlib import pyplot as plt
 from models.implicit import ImplicitModel
 from models.explicit import ExplicitModel, ExplicitModelWith, SinRegPrediction
-from data.regression import SinusoidalRegressionDataset
+from data.regression import SinusoidalRegressionDataset, GPRegressionDataset
 from tasks.utils import fig2img
 
 
@@ -80,13 +80,17 @@ class RegressionICL(LightningModule):
             dataset = self.trainer.datamodule.val_data[stage]
             stage = f"val_{stage}"
 
-        (x_c, y_c), (x_q, y_q), w = dataset.get_batch(n_context=dataset.max_context)
-        x_c, y_c = x_c.to(self.device), y_c.to(self.device)
-        if w is not None:
+        if isinstance(dataset, GPRegressionDataset):
+            (x_c, y_c), (x_q, y_q), w, (x, y) = dataset.get_batch(n_context=dataset.max_context, return_vis=True)
+            x = x[0]
+            x, y = x.to(self.device), y.to(self.device)
+        else:
+            (x_c, y_c), (x_q, y_q), w = dataset.get_batch(n_context=dataset.max_context)
             w = w.to(self.device)
-        x = torch.linspace(x_q.min(), x_q.max(), 100).to(self.device)
-        y = dataset.function(x.view(1, -1, 1).repeat(x_c.shape[0], 1, 1), w)
+            x = torch.linspace(x_q.min(), x_q.max(), 100).to(self.device)
+            y = dataset.function(x.view(1, -1, 1).repeat(x_c.shape[0], 1, 1), w)
 
+        x_c, y_c = x_c.to(self.device), y_c.to(self.device)
         x_c, y_c, y = x_c[:n_examples], y_c[:n_examples], y[:n_examples]
 
         x_reshaped = x.view(1, -1, 1).repeat(n_examples, 1, 1).to(self.device)

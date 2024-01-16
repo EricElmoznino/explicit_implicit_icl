@@ -145,7 +145,7 @@ class RegressionDataset(ABC, IterDataPipe):
             self.fixed_y_c += self.noise * torch.randn_like(self.fixed_y_c)
             self.fixed_y_q += self.noise * torch.randn_like(self.fixed_y_q)
 
-    def sample_finite_batch(self, n_context):
+    def sample_finite_batch(self, n_context, return_vis=False):
         x_c = self.fixed_x_c[: self.batch_size, :n_context]
         x_q = self.fixed_x_q[: self.batch_size, :n_context]
         y_c = self.fixed_y_c[: self.batch_size, :n_context]
@@ -154,7 +154,10 @@ class RegressionDataset(ABC, IterDataPipe):
             params = self.fixed_params[: self.batch_size]
             return (x_c, y_c), (x_q, y_q), params
         else:
-            return (x_c, y_c), (x_q, y_q), None
+            if return_vis:
+                return (x_c, y_c), (x_q, y_q), None, (self.fixed_x_vis[: self.batch_size], self.fixed_y_vis[: self.batch_size])
+            else:
+                return (x_c, y_c), (x_q, y_q), None
 
     def sample_x(self, n_context):
         x_c = torch.randn(self.batch_size, n_context, self.x_dim)
@@ -394,7 +397,10 @@ class GPRegressionDataset(RegressionDataset):
                     self.fixed_x[:, self.max_context :] = self.fixed_x[
                         :, self.max_context :
                     ] * 0.1 + 3.0 * direction / direction.norm(dim=-1, keepdim=True)
-            self.fixed_y = self.function(self.fixed_x)
+            self.fixed_x_vis = torch.linspace(self.fixed_x.min(), self.fixed_x.max(), 100).view(1, 100, self.x_dim).repeat(self.data_size, 1, 1)
+            x_temp = torch.cat([self.fixed_x, self.fixed_x_vis], dim=1)
+            y_temp = self.function(x_temp)
+            self.fixed_y, self.fixed_y_vis = y_temp[:, :2 * self.max_context], y_temp[:, 2 * self.max_context:]
 
             self.fixed_x_c = self.fixed_x[:, : self.max_context]
             self.fixed_x_q = self.fixed_x[:, self.max_context :]
@@ -402,16 +408,23 @@ class GPRegressionDataset(RegressionDataset):
             self.fixed_y_q = self.fixed_y[:, self.max_context :]
             self.fixed_params = None
 
-    def get_batch(self, n_context=None):
+    def get_batch(self, n_context=None, return_vis=False):
         if n_context is None:
             n_context = np.random.randint(self.min_context, self.max_context + 1)
 
         if self.finite:
             n_context = (self.min_context + self.max_context) // 2
-            return self.sample_finite_batch(n_context)
+            return self.sample_finite_batch(n_context, return_vis)
 
         x_c, x_q = self.sample_x(n_context)
         x = torch.cat([x_c, x_q], dim=1)
+        if return_vis:
+            x_vis = torch.linspace(x.min(), x.max(), 100).view(1, 100, x_c.shape[-1]).repeat(x_c.shape[0], 1, 1)
+            x = torch.cat([x, x_vis], dim=1)
         y = self.function(x)
+        if return_vis:
+            y, y_vis = y[:, :2 * n_context], y[:, 2 * n_context:]
         y_c, y_q = y[:, :n_context], y[:, n_context:]
+        if return_vis:
+            return (x_c, y_c), (x_q, y_q), None, (x_vis, y_vis)
         return (x_c, y_c), (x_q, y_q), None
