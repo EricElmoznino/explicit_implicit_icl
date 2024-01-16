@@ -21,7 +21,7 @@ class RegressionICL(LightningModule):
         (x_c, y_c), (x_q, y_q), w = batch
         y_q_pred, z = self.model(x_c, y_c, x_q)
         y_q_loss = torch.nn.functional.mse_loss(y_q_pred, y_q)
-        if z is not None:
+        if z is not None and self.w_predictor is not None:
             w_pred = self.w_predictor(z.detach()).view(*w.shape)
             w_loss = torch.nn.functional.mse_loss(w_pred, w.detach())
             loss = y_q_loss + w_loss
@@ -70,7 +70,9 @@ class RegressionICL(LightningModule):
             raise ValueError(f"Invalid dataset: {dataset}")
 
         (x_c, y_c), (x_q, y_q), w = dataset.get_batch(n_context=dataset.max_context)
-        x_c, y_c, w = x_c.to(self.device), y_c.to(self.device), w.to(self.device)
+        x_c, y_c = x_c.to(self.device), y_c.to(self.device)
+        if w is not None:
+            w = w.to(self.device)
         x = torch.linspace(x_q.min(), x_q.max(), 100).to(self.device)
         y = dataset.function(x.view(1, -1, 1).repeat(x_c.shape[0], 1, 1), w)
 
@@ -102,11 +104,12 @@ class RegressionICL(LightningModule):
         self.logger.log_image(f"examples/{stage}", [fig2img(fig)])
 
     def configure_optimizers(self):
-        if isinstance(self.model, ExplicitModelWith):
-            self.w_predictor = torch.nn.Linear(
-                self.model.context_model.n_features,
-                self.trainer.datamodule.train_data.n_params,
-            ).to(self.device)
+        if self.trainer.datamodule.val_data.fixed_params is not None:
+            if isinstance(self.model, ExplicitModelWith):
+                self.w_predictor = torch.nn.Linear(
+                    self.model.context_model.n_features,
+                    self.trainer.datamodule.train_data.n_params,
+                ).to(self.device)
 
         param_groups = [{"params": self.model.parameters()}]
         if self.w_predictor is not None:

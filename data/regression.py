@@ -11,7 +11,7 @@ from lightning import LightningDataModule
 from lightning.pytorch.utilities.seed import isolate_rng
 import warnings
 
-from data.utils import BatchedLinear
+from data.utils import *
 
 warnings.filterwarnings("ignore", message=".*does not have many workers.*")
 warnings.filterwarnings("ignore", message=".*`IterableDataset` has `__len__` defined.*")
@@ -24,7 +24,7 @@ def init_weights(m, std=1.0):
 
 
 class RegressionDataModule(LightningDataModule):
-    RegressionKind = Literal["polynomial", "sinusoid", "linear", "mlp"]
+    RegressionKind = Literal["polynomial", "sinusoid", "linear", "mlp", "gp"]
 
     def __init__(
         self,
@@ -47,6 +47,7 @@ class RegressionDataModule(LightningDataModule):
             "sinusoid": SinusoidalRegressionDataset,
             "linear": LinearRegressionDataset,
             "mlp": MLPRegressionDataset,
+            "gp": GPRegressionDataset,
         }[kind]
         self.train_data = RegressionDatasetCls(
             x_dim=x_dim,
@@ -135,8 +136,11 @@ class RegressionDataset(ABC, IterDataPipe):
         x_q = self.fixed_x_q[: self.batch_size, :n_context]
         y_c = self.fixed_y_c[: self.batch_size, :n_context]
         y_q = self.fixed_y_q[: self.batch_size, :n_context]
-        params = self.fixed_params[: self.batch_size]
-        return (x_c, y_c), (x_q, y_q), params
+        if self.fixed_params is not None:
+            params = self.fixed_params[: self.batch_size]
+            return (x_c, y_c), (x_q, y_q), params
+        else:
+            return (x_c, y_c), (x_q, y_q), None
 
     def sample_x(self, n_context):
         x_c = torch.randn(self.batch_size, n_context, self.x_dim)
@@ -329,3 +333,61 @@ class SinusoidalRegressionDataset(RegressionDataset):
         x = torch.sin(x.unsqueeze(-1) * freq.unsqueeze(1))
         y = (x * amplitudes.unsqueeze(1)).sum(dim=-1).sum(dim=-1, keepdim=True)
         return y
+
+class GPRegressionDataset(RegressionDataset):
+    def __init__(
+        self,
+        kernel: str = 'RBF',
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+
+        assert(self.x_dim == 1)
+        self.n_params = None
+
+        if kernel == 'RBF':
+            self.kernel = RBFKernel()
+        elif kernel == 'Matern':
+            self.kernel = Matern52Kernel()
+        elif kernel == 'Periodic':
+            self.kernel = PeriodicKernel()
+
+        if self.finite:
+            self.generate_finite_data()
+
+    def sample_function_params(self):
+        return None
+
+    def function(self, x, params=None) -> FloatTensor:
+        cov = self.kernel(x)  
+        mean = torch.zeros(x.shape[:2], device=x.device)
+        y = MultivariateNormal(mean, cov).rsample().unsqueeze(-1)
+        return y
+    
+    def generate_finite_data(self):
+        with isolate_rng():
+            torch.manual_seed(0)
+            self.fixed_x = torch.randn(self.data_size, 2 * self.max_context, self.x_dim)
+            if self.ood:
+                self.fixed_x[:, self.max_context:] *= 5.0
+            self.fixed_y = self.function(self.fixed_x)
+
+            self.fixed_x_c = self.fixed_x[:, :self.max_context]
+            self.fixed_x_q = self.fixed_x[:, self.max_context:]
+            self.fixed_y_c = self.fixed_y[:, :self.max_context]
+            self.fixed_y_q = self.fixed_y[:, self.max_context:]
+            self.fixed_params = None
+
+    def get_batch(self, n_context=None):
+        if n_context is None:
+            n_context = np.random.randint(self.min_context, self.max_context + 1)
+
+        if self.finite:
+            n_context = (self.min_context + self.max_context) // 2
+            return self.sample_finite_batch(n_context)
+
+        x_c, x_q = self.sample_x(n_context)
+        x = torch.cat([x_c, x_q], dim=1)
+        y = self.function(x)
+        y_c, y_q = y[:, :n_context], y[:, n_context:]
+        return (x_c, y_c), (x_q, y_q), None
