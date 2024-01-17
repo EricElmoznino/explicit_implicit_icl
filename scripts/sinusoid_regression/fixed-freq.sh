@@ -1,0 +1,1 @@
+python train.py --multirun hydra/launcher=mila_eric save_dir=/home/mila/e/eric.elmoznino/scratch/explicit_implicit_icl/logs experiment=sinusoid_regression/implicit,sinusoid_regression/explicit_tsf,sinusoid_regression/explicit_known ++experiment.data.context_style=same,near seed=0,1,2,3,4 ++experiment.callbacks=False ++experiment.data.kind_kwargs.fixed_freq=False
