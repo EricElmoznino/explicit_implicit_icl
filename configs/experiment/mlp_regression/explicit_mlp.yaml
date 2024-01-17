@@ -1,4 +1,5 @@
-tags: ["mlp-regression", "explicit-mlp"]
+dataset: mlp-regression
+model: explicit-mlp
 
 task:
   _target_: tasks.regression.RegressionICL

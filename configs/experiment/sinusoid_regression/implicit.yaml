@@ -1,4 +1,5 @@
-tags: ["sinusoid-regression", "implicit"]
+dataset: sinusoid-regression
+model: implicit
 
 task:
   _target_: tasks.regression.RegressionICL

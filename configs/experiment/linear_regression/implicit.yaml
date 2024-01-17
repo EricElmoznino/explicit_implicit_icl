@@ -1,4 +1,5 @@
-tags: ["linear-regression", "implicit"]
+dataset: linear-regression
+model: implicit
 
 task:
   _target_: tasks.regression.RegressionICL

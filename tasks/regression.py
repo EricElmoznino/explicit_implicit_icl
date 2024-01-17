@@ -81,7 +81,9 @@ class RegressionICL(LightningModule):
             stage = f"val_{stage}"
 
         if isinstance(dataset, GPRegressionDataset):
-            (x_c, y_c), (x_q, y_q), w, (x, y) = dataset.get_batch(n_context=dataset.max_context, return_vis=True)
+            (x_c, y_c), (x_q, y_q), w, (x, y) = dataset.get_batch(
+                n_context=dataset.max_context, return_vis=True
+            )
             x = x[0]
             x, y = x.to(self.device), y.to(self.device)
         else:

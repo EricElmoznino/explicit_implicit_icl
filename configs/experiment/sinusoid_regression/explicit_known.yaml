@@ -1,4 +1,5 @@
-tags: ["sinusoid-regression", "explicit-known"]
+dataset: sinusoid-regression
+model: explicit-known
 
 task:
   _target_: tasks.regression.RegressionICL

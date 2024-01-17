@@ -1,4 +1,5 @@
-tags: ["mlp-classification", "explicit-implicit"]
+dataset: mlp-classification
+model: implicit
 
 task:
   _target_: tasks.classification.ClassificationICL

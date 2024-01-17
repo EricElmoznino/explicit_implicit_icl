@@ -1,4 +1,5 @@
-tags: ["mlp-regression", "explicit-transformer"]
+dataset: mlp-regression
+model: explicit-transformer
 
 task:
   _target_: tasks.regression.RegressionICL
