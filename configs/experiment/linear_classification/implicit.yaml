@@ -10,7 +10,7 @@ task:
     n_features: 256
     n_heads: 4
     n_hidden: 512
-    n_layers: 4
+    n_layers: 8
 
 data:
   _target_: data.classification.ClassificationDataModule
