@@ -85,7 +85,7 @@ class TransformerContext(nn.Module):
                 nn.init.xavier_uniform_(p)
 
     def forward(self, x_c, y_c):
-        xy_c = torch.cat([x_c, y_c], dim=-1)
+        xy_c = x_c if y_c is None else torch.cat([x_c, y_c], dim=-1)
         xy_c = self.value_embedding(xy_c)
         c_token = (
             self.context_embedding.unsqueeze(0)

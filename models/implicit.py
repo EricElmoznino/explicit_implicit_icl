@@ -22,15 +22,18 @@ class TransformerImplicit(ImplicitModel):
         n_heads,
         n_hidden,
         n_layers,
-        freq_enc: bool = False,
+        input_has_y=True,
     ):
         super().__init__()
 
         self.x_dim = x_dim
         self.y_dim = y_dim
         self.n_features = n_features
+        self.input_has_y = input_has_y
 
-        self.value_embedding = nn.Linear(x_dim + y_dim, n_features)
+        self.value_embedding = nn.Linear(
+            x_dim + y_dim if input_has_y else x_dim, n_features
+        )
         self.query_embedding = nn.Parameter(
             torch.randn(n_features) / np.sqrt(n_features)
         )
@@ -63,11 +66,14 @@ class TransformerImplicit(ImplicitModel):
         bsz, c_len, _ = x_c.shape
         _, q_len, _ = x_q.shape
 
-        xy_c = torch.cat([x_c, y_c], dim=-1)
-        xy_u = torch.cat(
-            [x_q, torch.zeros(bsz, q_len, self.y_dim).to(x_q.device)], dim=-1
-        )
-        xy = torch.cat([xy_c, xy_u], dim=1)
+        if y_c is None:
+            xy_c, xy_q = x_c, x_q
+        else:
+            xy_c = torch.cat([x_c, y_c], dim=-1)
+            xy_q = torch.cat(
+                [x_q, torch.zeros(bsz, q_len, self.y_dim).to(x_q.device)], dim=-1
+            )
+        xy = torch.cat([xy_c, xy_q], dim=1)
 
         xy = self.value_embedding(xy)
         xy[:, -q_len:] += self.query_embedding.view(1, 1, self.n_features)
