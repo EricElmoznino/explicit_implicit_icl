@@ -1,0 +1,1 @@
+python train.py --multirun hydra/launcher=mila_eric save_dir=/home/mila/e/eric.elmoznino/scratch/explicit_implicit_icl/logs experiment=gene_crispr/implicit,gene_crispr/explicit_tsf,gene_crispr/explicit_mlp seed=0,1,2,3,4 ++experiment.callbacks=False

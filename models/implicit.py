@@ -84,3 +84,17 @@ class TransformerImplicit(ImplicitModel):
         y_q = self.encoder(xy, mask=src_mask)[:, -q_len:]
         y_q = self.prediction_head(y_q)
         return y_q
+
+
+class MeanBaseline(ImplicitModel):
+    def __init__(self):
+        super().__init__()
+        self.dummy_param = nn.Parameter(
+            torch.tensor(1.0)
+        )  # Dummy just to not break other code that assumes trainable models
+
+    def yq_given_d(self, x_c, y_c, x_q):
+        assert y_c is None
+        expression_means = x_c.mean(dim=1, keepdim=True)
+        y_q = self.dummy_param * expression_means.expand_as(x_q)
+        return y_q

@@ -33,12 +33,20 @@ class GeneCrisprDataModule(LightningDataModule):
         super().__init__()
         self.save_hyperparameters()
 
+        # Load the data and store attributes
         samples, ptb_ids = load_norman2019(data_path, perturb_type, include_control)
         self.n_ptbs = len(samples)
         self.n_ptb_targets = ptb_ids.shape[1]
         self.dim = samples[0].shape[1]
         self.query_dim_pct = query_dim_pct
 
+        # Re-order the data so that the validation set only consists of
+        # paired perturbations (so that there are no truly unseen perturbations)
+        ptb_ordering = ptb_ids.sum(axis=1).argsort()
+        samples = [samples[i] for i in ptb_ordering]
+        ptb_ids = ptb_ids[ptb_ordering]
+
+        # Create the PyTorch train/val datasets
         self.train_data = GeneCrisprDataset(
             samples=samples[: int(len(samples) * train_size)],
             ptb_ids=ptb_ids[: int(len(samples) * train_size)],
