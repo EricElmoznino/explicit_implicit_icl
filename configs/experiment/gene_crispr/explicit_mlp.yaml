@@ -14,6 +14,7 @@ task:
       n_heads: 4
       n_hidden: 512
       n_layers: 4
+      dropout: 0.0
     prediction_model:
       _target_: models.explicit.MLPPrediction
       x_dim: 5000

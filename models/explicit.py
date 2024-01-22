@@ -53,6 +53,7 @@ class TransformerContext(nn.Module):
         n_hidden,
         n_layers,
         z_dim=None,
+        dropout=0.0,
     ):
         super().__init__()
 
@@ -68,7 +69,7 @@ class TransformerContext(nn.Module):
                 d_model=n_features,
                 nhead=n_heads,
                 dim_feedforward=n_hidden,
-                dropout=0.0,
+                dropout=dropout,
                 batch_first=True,
             ),
             num_layers=n_layers,
@@ -121,6 +122,7 @@ class TransformerPrediction(nn.Module):
         n_hidden,
         n_layers,
         z_dim=None,
+        dropout=0.0,
     ):
         super().__init__()
 
@@ -139,7 +141,7 @@ class TransformerPrediction(nn.Module):
                 d_model=n_features,
                 nhead=n_heads,
                 dim_feedforward=n_hidden,
-                dropout=0.0,
+                dropout=dropout,
                 batch_first=True,
             ),
             num_layers=n_layers,
@@ -270,6 +272,7 @@ class ScrambledTransformerPrediction(nn.Module):
         n_hidden,
         n_layers,
         cross_attention=False,
+        dropout=0.0,
     ):
         super().__init__()
 
@@ -293,7 +296,7 @@ class ScrambledTransformerPrediction(nn.Module):
                 d_model=n_features,
                 nhead=n_heads,
                 dim_feedforward=n_hidden,
-                dropout=0.0,
+                dropout=dropout,
                 batch_first=True,
             ),
             num_layers=n_layers,

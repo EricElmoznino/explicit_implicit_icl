@@ -23,6 +23,7 @@ class TransformerImplicit(ImplicitModel):
         n_hidden,
         n_layers,
         input_has_y=True,
+        dropout=0.0,
     ):
         super().__init__()
 
@@ -42,7 +43,7 @@ class TransformerImplicit(ImplicitModel):
                 d_model=n_features,
                 nhead=n_heads,
                 dim_feedforward=n_hidden,
-                dropout=0.0,
+                dropout=dropout,
                 batch_first=True,
             ),
             num_layers=n_layers,
