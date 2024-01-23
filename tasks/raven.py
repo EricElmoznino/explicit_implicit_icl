@@ -139,8 +139,12 @@ class RavenICL(LightningModule):
         self.num_values = dm.num_values
         self.num_rules = dm.num_rules
 
-        self.train_rule_accuracy = MulticlassExactMatch(num_classes=self.num_rules)
-        self.val_rule_accuracy = MulticlassExactMatch(num_classes=self.num_rules)
+        self.train_rule_accuracy = MulticlassExactMatch(num_classes=self.num_rules).to(
+            self.device
+        )
+        self.val_rule_accuracy = MulticlassExactMatch(num_classes=self.num_rules).to(
+            self.device
+        )
 
         self.embedding = torch.nn.Linear(
             self.num_attributes * self.num_values,
