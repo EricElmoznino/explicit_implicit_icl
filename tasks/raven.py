@@ -161,10 +161,10 @@ class RavenICL(LightningModule):
         params = (
             list(self.model.parameters())
             + list(self.embedding.parameters())
-            + list(self.context_pos_encodings.parameters())
+            + [self.context_pos_encodings]
         )
         if self.query_pos_encodings is not None:
-            params += list(self.query_pos_encodings.parameters())
+            params += [self.query_pos_encodings]
         param_groups = [{"params": params}]
         if self.rule_predictor is not None:
             param_groups += [
