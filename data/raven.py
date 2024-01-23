@@ -1,4 +1,5 @@
 import pickle
+import os
 import numpy as np
 import torch
 from torch import LongTensor
@@ -26,9 +27,13 @@ class RavenDataModule(LightningDataModule):
         self.num_rules: int | None = None
 
     def setup(self, stage: str) -> None:
-        self.train_data = RavenDataset(f"{self.hparams.data_dir}/train.pkl")
-        self.val_iid_data = RavenDataset(f"{self.hparams.data_dir}/validation.pkl")
-        self.val_ood_data = RavenDataset(f"{self.hparams.data_dir}/test.pkl")
+        self.train_data = RavenDataset(os.path.join(self.hparams.data_dir, "train.pkl"))
+        self.val_iid_data = RavenDataset(
+            os.path.join(self.hparams.data_dir, "validation.pkl")
+        )
+        self.val_ood_data = RavenDataset(
+            os.path.join(self.hparams.data_dir, "test.pkl")
+        )
 
         self.num_attributes = self.train_data.num_attributes
         self.num_values = self.train_data.num_values

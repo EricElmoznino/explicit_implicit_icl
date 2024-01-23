@@ -278,7 +278,7 @@ class RavenTransformerPrediction(nn.Module):
 class RavenMLPPrediction(nn.Module):
     def __init__(self, dim, z_dim, hidden_dim):
         super().__init__()
-        self.mlp = MLP(dim * 2, hidden_dim, dim)
+        self.mlp = MLP(dim * 2 + z_dim, hidden_dim, dim)
 
     def forward(self, z, x_q):
         x_q = x_q.view(x_q.shape[0], 2 * x_q.shape[-1])

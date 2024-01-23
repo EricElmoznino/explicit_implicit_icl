@@ -31,8 +31,8 @@ class RavenICL(LightningModule):
         self.num_values: int | None = None
         self.num_rules: int | None = None
 
-        self.train_accuracy = MulticlassAccuracy()
-        self.val_accuracy = MulticlassAccuracy()
+        self.train_accuracy = MulticlassAccuracy(num_classes=8)
+        self.val_accuracy = MulticlassAccuracy(num_classes=8)
         self.train_rule_accuracy: MulticlassExactMatch | None = None
         self.val_rule_accuracy: MulticlassExactMatch | None = None
 
@@ -46,7 +46,7 @@ class RavenICL(LightningModule):
         x_c += self.context_pos_encodings.unsqueeze(0)
         if self.query_pos_encodings is not None:
             x_q += self.query_pos_encodings.unsqueeze(0)
-        y_q_embedding, z = self.model(x_c, None, x_q.unsqueeze(1))
+        y_q_embedding, z = self.model(x_c, None, x_q)
         y_q_embedding = y_q_embedding.squeeze(1)
         return y_q_embedding, z
 
@@ -103,19 +103,34 @@ class RavenICL(LightningModule):
             rule_loss = torch.nn.functional.cross_entropy(rule_pred, rule)
             self.val_rule_accuracy(rule_pred, rule)
             self.log(
-                f"val_{setting}/rule_loss", rule_loss, on_step=False, on_epoch=True
+                f"val_{setting}/rule_loss",
+                rule_loss,
+                on_step=False,
+                on_epoch=True,
+                add_dataloader_idx=False,
             )
             self.log(
                 f"val_{setting}/rule_accuracy",
                 self.val_rule_accuracy,
                 on_step=False,
                 on_epoch=True,
+                add_dataloader_idx=False,
             )
 
         self.val_accuracy(y_q_pred, y_q_label)
-        self.log(f"val_{setting}/loss", y_q_loss, on_step=False, on_epoch=True)
         self.log(
-            f"val_{setting}/accuracy", self.val_accuracy, on_step=False, on_epoch=True
+            f"val_{setting}/loss",
+            y_q_loss,
+            on_step=False,
+            on_epoch=True,
+            add_dataloader_idx=False,
+        )
+        self.log(
+            f"val_{setting}/accuracy",
+            self.val_accuracy,
+            on_step=False,
+            on_epoch=True,
+            add_dataloader_idx=False,
         )
 
     def configure_optimizers(self):
@@ -141,9 +156,8 @@ class RavenICL(LightningModule):
 
         param_groups = [
             {
-                "params": (
-                    list(self.model.parameters()) + list(self.embedding.parameters()),
-                )
+                "params": list(self.model.parameters())
+                + list(self.embedding.parameters())
             }
         ]
         if self.rule_predictor is not None:
