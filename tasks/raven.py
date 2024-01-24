@@ -27,8 +27,8 @@ class RavenICL(LightningModule):
         self.embedding: nn.Linear | None = None
         self.rule_predictor: nn.Linear = None
 
-        self.num_attributes: int | None = None
-        self.num_rules: int | None = None
+        self.n_attributes: int | None = None
+        self.n_rules: int | None = None
 
         self.train_accuracy = MulticlassAccuracy(num_classes=8)
         self.val_accuracy = MulticlassAccuracy(num_classes=8)
@@ -51,7 +51,7 @@ class RavenICL(LightningModule):
 
     def predict_rule(self, z) -> torch.FloatTensor:
         rule_pred = self.rule_predictor(z.detach())
-        rule_pred = rule_pred.view(-1, self.num_rules, self.num_attributes)
+        rule_pred = rule_pred.view(-1, self.n_rules, self.n_attributes)
         return rule_pred
 
     def training_step(self, batch, batch_idx):
@@ -126,24 +126,24 @@ class RavenICL(LightningModule):
 
     def configure_optimizers(self):
         dm: RavenDataModule = self.trainer.datamodule
-        self.num_attributes = dm.num_attributes
-        self.num_rules = dm.num_rules
+        self.n_attributes = dm.n_attributes
+        self.n_rules = dm.n_rules
 
-        self.train_rule_accuracy = MulticlassExactMatch(num_classes=self.num_rules).to(
+        self.train_rule_accuracy = MulticlassExactMatch(num_classes=self.n_rules).to(
             self.device
         )
-        self.val_rule_accuracy = MulticlassExactMatch(num_classes=self.num_rules).to(
+        self.val_rule_accuracy = MulticlassExactMatch(num_classes=self.n_rules).to(
             self.device
         )
 
         self.embedding = torch.nn.Linear(
-            self.num_attributes, self.hparams.embedding_dim
+            self.n_attributes, self.hparams.embedding_dim
         ).to(self.device)
 
         if isinstance(self.model, ExplicitModelWith):
             self.rule_predictor = torch.nn.Linear(
                 self.model.context_model.z_dim,
-                self.num_attributes * self.num_rules,
+                self.n_attributes * self.n_rules,
             ).to(self.device)
 
         params = (

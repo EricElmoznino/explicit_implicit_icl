@@ -1,3 +1,4 @@
+from typing import Literal
 import pickle
 import os
 import numpy as np
@@ -14,30 +15,35 @@ warnings.filterwarnings("ignore", message=".*`IterableDataset` has `__len__` def
 
 
 class RavenDataModule(LightningDataModule):
+    OODSetting = Literal["inpo", "expo-l1", "expo-l2"]
+    NValues = Literal[20, 30, 40, 80]
+
     def __init__(
         self,
         data_dir: str,
+        n_values: NValues = 40,
+        setting: OODSetting = "inpo",
         batch_size: int = 128,
         num_workers: int = 0,
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
-        self.num_attributes: int | None = None
-        self.num_values: int | None = None
-        self.num_rules: int | None = None
+        self.n_values: int = n_values
+        self.n_attributes: int | None = None
+        self.n_rules: int | None = None
 
     def setup(self, stage: str) -> None:
-        self.train_data = RavenDataset(os.path.join(self.hparams.data_dir, "train.pkl"))
-        self.val_iid_data = RavenDataset(
-            os.path.join(self.hparams.data_dir, "validation.pkl")
-        )
-        self.val_ood_data = RavenDataset(
-            os.path.join(self.hparams.data_dir, "test.pkl")
-        )
-
-        self.num_attributes = self.train_data.num_attributes
-        self.num_values = self.train_data.num_values
-        self.num_rules = self.train_data.num_rules
+        folder = {
+            "inpo": "l2_inpo",
+            "expo-l1": "l1_expo",
+            "expo-l2": "l2_expo",
+        }[self.hparams.setting]
+        folder = os.path.join(self.hparams.data_dir, f"{folder}_{self.n_values}")
+        self.train_data = RavenDataset(os.path.join(folder, "train_visual.pkl"))
+        self.val_iid_data = RavenDataset(os.path.join(folder, "validation_visual.pkl"))
+        self.val_ood_data = RavenDataset(os.path.join(folder, "test_visual.pkl"))
+        self.n_attributes = self.train_data.num_attributes
+        self.n_rules = self.train_data.num_rules
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(

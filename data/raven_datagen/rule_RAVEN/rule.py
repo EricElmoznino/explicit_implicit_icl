@@ -1,3 +1,4 @@
+
 def create_rule(attr, name, value):
     if name == "constant":
         return Constant(attr, name, value)
@@ -12,7 +13,6 @@ def create_rule(attr, name, value):
     else:
         raise ValueError
 
-
 def deserialize_rule_key(key):
     result = key.split("_")
     result[2] = int(result[2])
@@ -22,10 +22,8 @@ def deserialize_rule_key(key):
 def check_constant(a, b, c):
     return a == b == c
 
-
 def check_progression(value, a, b, c):
     return (b - a) == value and (c - b) == value
-
 
 def check_arithmetic(value, a, b, c):
     if value == 1:
@@ -33,13 +31,11 @@ def check_arithmetic(value, a, b, c):
     else:
         return a - b == c
 
-
 def check_comparison(value, a, b, c):
     if value == 1:
         return max(a, b) == c
     else:
         return min(a, b) == c
-
 
 def check_varprogression(value, a, b, c):
     if value == 1:
@@ -51,35 +47,33 @@ def check_varprogression(value, a, b, c):
     elif value == -2:
         return (b - a) == -2 and (c - b) == -1
 
-
 class Rule(object):
     def __init__(self, attr, name, value) -> None:
         self.attr = attr
         self.name = name
         self.value = value
-
+    
     def to_tuple(self):
         return (self.attr, self.name, self.value)
 
     def to_dict_key(self):
         return "_".join([str(i) for i in self.to_tuple()])
 
-
 class Constant(Rule):
     def __init__(self, name, attr, value) -> None:
         super(Constant, self).__init__(name, attr, value)
-
+    
     def check(self, a, b, c):
         return check_constant(a, b, c)
-
+    
     def apply(self, a, b):
         return a
-
+    
 
 class Progression(Rule):
     def __init__(self, name, attr, value) -> None:
         super(Progression, self).__init__(name, attr, value)
-
+    
     def check(self, a, b, c):
         flag = False
         flag = flag or check_constant(a, b, c)
@@ -89,7 +83,7 @@ class Progression(Rule):
             flag = flag or check_comparison(v, a, b, c)
         for v in [-2, -1, 1, 2]:
             flag = flag or check_varprogression(v, a, b, c)
-
+        
         if flag:
             # if is other rule
             return False
@@ -98,7 +92,6 @@ class Progression(Rule):
 
     def apply(self, a, b):
         return 2 * b - a
-
 
 class Arithmetic(Rule):
     def __init__(self, name, attr, value) -> None:
@@ -113,7 +106,7 @@ class Arithmetic(Rule):
             flag = flag or check_comparison(v, a, b, c)
         for v in [-2, -1, 1, 2]:
             flag = flag or check_varprogression(v, a, b, c)
-
+        
         if flag:
             # if is other rule
             return False
@@ -123,19 +116,18 @@ class Arithmetic(Rule):
                 return False
             else:
                 return check_arithmetic(self.value, a, b, c)
-
+    
     def apply(self, a, b):
         return (a + b) if self.value == 1 else (a - b)
 
 
 class Comparison(Rule):
-    """
+    '''
     max for 1 and min for -1
     c = max or min of a, b
-
+    
     filter out ambiguious samples
-    """
-
+    '''
     def __init__(self, name, attr, value) -> None:
         super(Comparison, self).__init__(name, attr, value)
 
@@ -148,7 +140,7 @@ class Comparison(Rule):
             flag = flag or check_arithmetic(v, a, b, c)
         for v in [-2, -1, 1, 2]:
             flag = flag or check_varprogression(v, a, b, c)
-
+        
         if flag:
             # if is other rule
             return False
@@ -161,16 +153,14 @@ class Comparison(Rule):
     def apply(self, a, b):
         return max(a, b) if self.value == 1 else min(a, b)
 
-
 class VarProgression(Rule):
-    """
+    '''
     1: +1, +2
     2: +2, +1
     -1: -1, -2
     -2: -2, -1
     filter out ambiguious samples
-    """
-
+    '''
     def __init__(self, name, attr, value) -> None:
         super(VarProgression, self).__init__(name, attr, value)
 
@@ -183,7 +173,7 @@ class VarProgression(Rule):
             flag = flag or check_arithmetic(v, a, b, c)
         for v in [-1, 1]:
             flag = flag or check_comparison(v, a, b, c)
-
+        
         if flag:
             # if is other rule
             return False
@@ -200,7 +190,6 @@ class VarProgression(Rule):
         elif self.value == -2:
             return b - 1
 
-
 class RuleGroup(object):
     def __init__(self, rules):
         # rules = [('constant', None)]
@@ -208,12 +197,14 @@ class RuleGroup(object):
 
     def to_tuple(self):
         return [r.to_tuple() for r in self.rules]
-
+    
     def __getitem__(self, i):
         return self.rules[i]
-
+    
     def apply(self, row_3_1, row_3_2):
         result = []
         for a, b, r in zip(row_3_1, row_3_2, self.rules):
             result.append(r.apply(a, b))
         return tuple(result)
+
+    
