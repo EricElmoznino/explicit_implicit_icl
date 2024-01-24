@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from torchmetrics.classification import MulticlassAccuracy, MulticlassExactMatch
 from lightning import LightningModule
 from models.implicit import ImplicitModel
-from models.explicit import ExplicitModel, ExplicitModelWith
+from models.explicit import ExplicitModel, ExplicitModelWith, RavenKnownPrediction
 from data.raven import RavenDataModule
 
 
@@ -18,6 +18,7 @@ class RavenICL(LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters(ignore="model")
+
         self.model = model
         self.context_pos_encodings = nn.Parameter(torch.randn(6, embedding_dim))
         if use_query_pos_encodings:
@@ -35,18 +36,28 @@ class RavenICL(LightningModule):
         self.train_rule_accuracy: MulticlassExactMatch | None = None
         self.val_rule_accuracy: MulticlassExactMatch | None = None
 
+        if isinstance(self.model, ExplicitModelWith) and isinstance(
+            self.model.prediction_model, RavenKnownPrediction
+        ):
+            self.encode_query = False
+        else:
+            self.encode_query = True
+
     def forward(self, x_c, x_q) -> tuple[torch.FloatTensor, torch.FloatTensor | None]:
-        x_c, x_q = self.embedding(x_c), self.embedding(x_q)
+        x_c = self.embedding(x_c)
         x_c += self.context_pos_encodings.unsqueeze(0)
-        if self.query_pos_encodings is not None:
-            x_q += self.query_pos_encodings.unsqueeze(0)
+        if self.encode_query:
+            x_q = self.embedding(x_q)
+            if self.query_pos_encodings is not None:
+                x_q += self.query_pos_encodings.unsqueeze(0)
         y_q_embedding, z = self.model(x_c, None, x_q)
-        y_q_embedding = y_q_embedding.squeeze(1)
+        y_q_embedding = y_q_embedding
         return y_q_embedding, z
 
     def compare_to_candidates(self, y_q_embedding, y_q_candidates) -> torch.FloatTensor:
-        y_q_candidates = self.embedding(y_q_candidates)
-        sim = torch.einsum("bd,bmd->bm", y_q_embedding, y_q_candidates)
+        if self.encode_query:
+            y_q_candidates = self.embedding(y_q_candidates)
+        sim = -torch.cdist(y_q_embedding, y_q_candidates).squeeze(1)
         return sim
 
     def predict_rule(self, z) -> torch.FloatTensor:

@@ -13,8 +13,8 @@ task:
       n_heads: 4
       n_hidden: 512
       n_layers: 4
-      dropout: 0.2
-      z_dim: 128
+      dropout: 0.0
+      z_dim: ${...embedding_dim}
     prediction_model:
       _target_: models.explicit.RavenTransformerPrediction
       dim: ${...embedding_dim}

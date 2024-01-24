@@ -284,7 +284,50 @@ class RavenMLPPrediction(nn.Module):
         x_q = x_q.view(x_q.shape[0], 2 * x_q.shape[-1])
         x_q = torch.cat([z, x_q], dim=-1)
         y_q = self.mlp(x_q)
-        return y_q
+        return y_q.unsqueeze(1)
+
+
+class RavenKnownPrediction(nn.Module):
+    rule_applications = [
+        lambda x: x[:, 0],
+        lambda x: x[:, 1] - 2,
+        lambda x: x[:, 1] - 1,
+        lambda x: x[:, 1] + 1,
+        lambda x: x[:, 1] + 2,
+        lambda x: x[:, 0] - x[:, 1],
+        lambda x: x[:, 0] + x[:, 1],
+        lambda x: x.min(dim=-1).values,
+        lambda x: x.max(dim=-1).values,
+        lambda x: x[:, 1] + 2,
+        lambda x: x[:, 1] + 1,
+        lambda x: x[:, 1] - 2,
+        lambda x: x[:, 1] - 1,
+    ]
+
+    def __init__(
+        self,
+        z_dim,
+    ):
+        super().__init__()
+        self.z_dim = z_dim
+        if z_dim != 4 * 13:
+            self.rule_encoder = nn.Linear(z_dim, 4 * 13)
+        else:
+            self.rule_encoder = nn.Identity()
+
+    def forward(self, z, x_q):
+        rule_probs = self.rule_encoder(z).view(-1, 4, 13)
+        rule_probs = torch.softmax(rule_probs, dim=-1)
+        y_q = torch.stack(
+            [
+                torch.stack([f(x_q[:, :, i]) for i in range(4)], dim=-1)
+                for f in self.rule_applications
+            ],
+            dim=-1,
+        )
+        y_q *= rule_probs
+        y_q = y_q.sum(dim=-1)
+        return y_q.unsqueeze(1)
 
 
 class LinRegPrediction(nn.Module):
