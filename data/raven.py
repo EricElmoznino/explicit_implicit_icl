@@ -2,7 +2,7 @@ import pickle
 import os
 import numpy as np
 import torch
-from torch import LongTensor
+from torch import FloatTensor, LongTensor
 from torch.utils.data import DataLoader
 from torchdata.datapipes.map import MapDataPipe
 from lightning import LightningDataModule
@@ -105,9 +105,9 @@ class RavenDataset(MapDataPipe):
             label.append(l)
             rule.append(r)
         self.context, self.query, self.candidates, self.label, self.rule = (
-            torch.from_numpy(np.stack(context)),
-            torch.from_numpy(np.stack(query)),
-            torch.from_numpy(np.stack(candidates)),
+            torch.from_numpy(np.stack(context)).float(),
+            torch.from_numpy(np.stack(query)).float(),
+            torch.from_numpy(np.stack(candidates)).float(),
             torch.from_numpy(np.stack(label)),
             torch.from_numpy(np.stack(rule)),
         )
@@ -121,7 +121,7 @@ class RavenDataset(MapDataPipe):
 
     def __getitem__(
         self, index
-    ) -> tuple[LongTensor, LongTensor, LongTensor, int, LongTensor]:
+    ) -> tuple[FloatTensor, FloatTensor, FloatTensor, int, LongTensor]:
         return (
             self.context[index],
             self.query[index],

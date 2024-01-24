@@ -7,7 +7,7 @@ task:
   embedding_dim: 256
   model:
     _target_: models.implicit.RavenTransformerImplicit
-    dim: 256
+    dim: ${..embedding_dim}
     n_heads: 4
     n_hidden: 512
     n_layers: 8
@@ -16,7 +16,7 @@ task:
 data:
   _target_: data.raven.RavenDataModule
   data_dir: "/home/mila/e/eric.elmoznino/scratch/explicit_implicit_icl/data/raven"
-  batch_size: 128
+  batch_size: 512
   num_workers: 0 
 
 trainer:

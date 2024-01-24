@@ -16,12 +16,13 @@ def train(cfg):
     )
 
     # Add experiment metadata to the logger
-    logger.experiment.config.update(
-        {
-            "dataset": cfg.experiment.dataset,
-            "model": cfg.experiment.model,
-        }
-    )
+    if logger:
+        logger.experiment.config.update(
+            {
+                "dataset": cfg.experiment.dataset,
+                "model": cfg.experiment.model,
+            }
+        )
 
     trainer = Trainer(
         logger=logger,

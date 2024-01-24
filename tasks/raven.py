@@ -28,7 +28,6 @@ class RavenICL(LightningModule):
         self.rule_predictor: nn.Linear = None
 
         self.num_attributes: int | None = None
-        self.num_values: int | None = None
         self.num_rules: int | None = None
 
         self.train_accuracy = MulticlassAccuracy(num_classes=8)
@@ -37,11 +36,6 @@ class RavenICL(LightningModule):
         self.val_rule_accuracy: MulticlassExactMatch | None = None
 
     def forward(self, x_c, x_q) -> tuple[torch.FloatTensor, torch.FloatTensor | None]:
-        x_c, x_q = (
-            F.one_hot(x_c, num_classes=self.num_values).float(),
-            F.one_hot(x_q, num_classes=self.num_values).float(),
-        )
-        x_c, x_q = x_c.flatten(start_dim=2), x_q.flatten(start_dim=2)
         x_c, x_q = self.embedding(x_c), self.embedding(x_q)
         x_c += self.context_pos_encodings.unsqueeze(0)
         if self.query_pos_encodings is not None:
@@ -51,16 +45,13 @@ class RavenICL(LightningModule):
         return y_q_embedding, z
 
     def compare_to_candidates(self, y_q_embedding, y_q_candidates) -> torch.FloatTensor:
-        y_q_candidates = F.one_hot(y_q_candidates, num_classes=self.num_values).float()
-        y_q_candidates = y_q_candidates.flatten(start_dim=2)
         y_q_candidates = self.embedding(y_q_candidates)
         sim = torch.einsum("bd,bmd->bm", y_q_embedding, y_q_candidates)
         return sim
 
     def predict_rule(self, z) -> torch.FloatTensor:
         rule_pred = self.rule_predictor(z.detach())
-        rule_pred = rule_pred.view(-1, self.num_attributes, self.num_rules)
-        rule_pred = rule_pred.permute(0, 2, 1)
+        rule_pred = rule_pred.view(-1, self.num_rules, self.num_attributes)
         return rule_pred
 
     def training_step(self, batch, batch_idx):
@@ -136,7 +127,6 @@ class RavenICL(LightningModule):
     def configure_optimizers(self):
         dm: RavenDataModule = self.trainer.datamodule
         self.num_attributes = dm.num_attributes
-        self.num_values = dm.num_values
         self.num_rules = dm.num_rules
 
         self.train_rule_accuracy = MulticlassExactMatch(num_classes=self.num_rules).to(
@@ -147,9 +137,7 @@ class RavenICL(LightningModule):
         )
 
         self.embedding = torch.nn.Linear(
-            self.num_attributes * self.num_values,
-            self.hparams.embedding_dim,
-            bias=False,
+            self.num_attributes, self.hparams.embedding_dim
         ).to(self.device)
 
         if isinstance(self.model, ExplicitModelWith):

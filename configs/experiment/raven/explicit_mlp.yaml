@@ -10,22 +10,22 @@ task:
     _target_: models.explicit.ExplicitModelWith
     context_model:
       _target_: models.explicit.RavenTransformerContext
-      dim: 256
+      dim: ${...embedding_dim}
       n_heads: 4
       n_hidden: 512
       n_layers: 4
       dropout: 0.0
-      z_dim: ${.dim}
+      z_dim: ${...embedding_dim}
     prediction_model:
       _target_: models.explicit.RavenMLPPrediction
-      dim: 256
-      z_dim: ${.dim}
-      hidden_dim: 512
+      dim: ${...embedding_dim}
+      hidden_dim: ${..context_model.n_hidden}
+      z_dim: ${..context_model.z_dim}
 
 data:
   _target_: data.raven.RavenDataModule
   data_dir: "/home/mila/e/eric.elmoznino/scratch/explicit_implicit_icl/data/raven"
-  batch_size: 128
+  batch_size: 512
   num_workers: 0 
 
 trainer:
