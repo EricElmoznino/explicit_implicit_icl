@@ -37,7 +37,7 @@ callbacks:
   - _target_: lightning.pytorch.callbacks.EarlyStopping
     monitor: "val_iid/loss"
     mode: "min"
-    patience: 50
+    patience: 100
   # - _target_: lightning.pytorch.callbacks.ModelCheckpoint
   #   monitor: "val_iid/loss"
   #   mode: "min"

@@ -1,1 +1,1 @@
-python train.py --multirun hydra/launcher=mila_eric save_dir=/home/mila/e/eric.elmoznino/scratch/explicit_implicit_icl/logs experiment=raven/implicit,raven/explicit_tsf,raven/explicit_mlp seed=0
+python train.py --multirun hydra/launcher=mila_eric save_dir=/home/mila/e/eric.elmoznino/scratch/explicit_implicit_icl/logs experiment=raven/implicit,raven/explicit_tsf,raven/explicit_mlp seed=0,1,2,3,4
