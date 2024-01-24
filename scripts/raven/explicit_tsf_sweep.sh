@@ -1,0 +1,1 @@
+python train.py --multirun hydra/launcher=mila_eric save_dir=/home/mila/e/eric.elmoznino/scratch/explicit_implicit_icl/logs experiment=raven/explicit_tsf ++experiment.task.model.context_model.n_layers=3,4 ++experiment.task.model.context_model.dropout=0.0,0.2 ++experiment.task.model.context_model.z_dim=128,256 logger.tags=[explicit_tsf_sweep]
