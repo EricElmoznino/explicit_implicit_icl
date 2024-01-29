@@ -163,4 +163,6 @@ cython_debug/
 __pycache__
 logs/*
 .DS_Store
+data/raven_datagen/data/*
 !.gitkeep
+data/hh_data.pkl

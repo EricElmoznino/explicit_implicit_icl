@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import pickle
 from typing import Literal, Any, Iterable
 
 import numpy as np
@@ -6,10 +7,13 @@ import torch
 from torch import FloatTensor
 from torch.utils.data import DataLoader
 from torchdata.datapipes.iter import IterDataPipe
+from torchdiffeq import odeint
 
 from lightning import LightningDataModule
 from lightning.pytorch.utilities.seed import isolate_rng
 import warnings
+
+from tqdm import tqdm
 
 from data.utils import *
 
@@ -24,7 +28,7 @@ def init_weights(m, std=1.0):
 
 
 class RegressionDataModule(LightningDataModule):
-    RegressionKind = Literal["polynomial", "sinusoid", "linear", "mlp", "gp"]
+    RegressionKind = Literal["polynomial", "sinusoid", "linear", "mlp", "gp", "hh"]
 
     def __init__(
         self,
@@ -50,6 +54,7 @@ class RegressionDataModule(LightningDataModule):
             "linear": LinearRegressionDataset,
             "mlp": MLPRegressionDataset,
             "gp": GPRegressionDataset,
+            "hh": HHRegressionDataset
         }[kind]
         self.train_data = RegressionDatasetCls(
             x_dim=x_dim,
@@ -434,3 +439,82 @@ class GPRegressionDataset(RegressionDataset):
         if return_vis:
             return (x_c, y_c), (x_q, y_q), None, (x_vis, y_vis)
         return (x_c, y_c), (x_q, y_q), None
+
+
+class HHRegressionDataset(RegressionDataset):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        assert self.x_dim == 1
+        self.n_params = 2
+        with open('hh_data.pkl', 'rb') as f:
+            self.data, self.params_list = pickle.load(f).values()
+        self.params_list = torch.stack([torch.stack(list(self.params_list[i].values())) for i in range(len(self.params_list))])
+        self.simulation_timesteps = self.data.shape[1]
+        self.x_points = torch.linspace(0,1000,1000)
+        self.x_points_dict  = {self.x_points[i].item(): i for i in(range(len(self.x_points)))}
+
+        if self.finite:
+            self.generate_finite_data()
+
+    def sample_x(self, n_context):
+        x_c = torch.zeros((self.batch_size, n_context, self.x_dim)).uniform_(0, 250).int()
+        #x_c = (torch.randn(self.batch_size, n_context, self.x_dim) * 100).int().abs()
+        if self.context_style == "same":
+            x_q = x_c = torch.zeros((self.batch_size, n_context, self.x_dim)).uniform_(0, 250).int()
+        elif self.context_style == "near":
+            x_q = (x_c + 10 * torch.randn_like(x_c)).int()
+        else:
+            raise ValueError("Invalid context style")
+        
+        x_c, x_q = x_c.clamp(min=0, max=self.simulation_timesteps-1), x_q.clamp(min=0, max=self.simulation_timesteps-1)
+
+        x_c = self.x_points[x_c]
+        x_q = self.x_points[x_q]
+        return x_c, x_q
+
+    def sample_function_params(self):
+        # Uniform over [0,40]^2
+        return self.params_list[torch.randperm(len(self.params_list))[:self.batch_size]]
+    
+    def function(self, x: torch.Tensor, params) -> FloatTensor:
+        # Duration can be bigger than self.simulation_timesteps 
+        x_id = x.clone().to('cpu')
+        x_id.apply_(self.x_points_dict.get)
+        x_id = x_id.to(int).to(params.device)
+        params_id = torch.stack([torch.all(self.params_list == p.to('cpu'), dim=1).int().argmax() for p in params])
+        return self.data[params_id[:, None, None].to('cpu'), x_id.to('cpu')].to(x.device)
+    
+    def generate_finite_data(self):
+
+        with isolate_rng():
+            torch.manual_seed(0)
+            #self.fixed_x_c = (torch.randn(self.data_size, self.max_context, self.x_dim) * 100).int().abs()
+            #self.fixed_x_q = (torch.randn(self.data_size, self.max_context, self.x_dim) * 100).int().abs()
+            self.fixed_x_c = torch.zeros((self.data_size, self.max_context, self.x_dim)).uniform_(0, 250).int()
+            self.fixed_x_q = torch.zeros((self.data_size, self.max_context, self.x_dim)).uniform_(0, 250).int()
+
+            if self.ood:
+                if self.ood_style == "wide":
+                    self.fixed_x_q *= 3
+                elif self.ood_style == "far":
+                    direction = torch.randn(self.fixed_x_q.shape)
+                    self.fixed_x_q = (
+                        self.fixed_x_q
+                        + (10.0 * direction / direction.norm(dim=-1, keepdim=True)).to(int)
+                    )
+            self.fixed_x_c = self.fixed_x_c.clamp(min=0, max=self.simulation_timesteps - 1).to(int)
+            self.fixed_x_q = self.fixed_x_q.clamp(min=0, max=self.simulation_timesteps - 1).to(int)
+
+            self.fixed_x_c = self.x_points[self.fixed_x_c]
+            self.fixed_x_q = self.x_points[self.fixed_x_q]
+                
+            self.fixed_params = self.sample_function_params()
+            self.fixed_y_c = self.function(self.fixed_x_c, self.fixed_params)
+            self.fixed_y_q = self.function(self.fixed_x_q, self.fixed_params)
+            self.fixed_y_c += self.noise * torch.randn_like(self.fixed_y_c)
+            self.fixed_y_q += self.noise * torch.randn_like(self.fixed_y_q)
+        
+    
+
+    
