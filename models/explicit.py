@@ -53,6 +53,7 @@ class TransformerContext(nn.Module):
         n_hidden,
         n_layers,
         z_dim=None,
+        dropout=0.0,
     ):
         super().__init__()
 
@@ -68,7 +69,7 @@ class TransformerContext(nn.Module):
                 d_model=n_features,
                 nhead=n_heads,
                 dim_feedforward=n_hidden,
-                dropout=0.0,
+                dropout=dropout,
                 batch_first=True,
             ),
             num_layers=n_layers,
@@ -121,6 +122,7 @@ class TransformerPrediction(nn.Module):
         n_hidden,
         n_layers,
         z_dim=None,
+        dropout=0.0,
     ):
         super().__init__()
 
@@ -139,7 +141,7 @@ class TransformerPrediction(nn.Module):
                 d_model=n_features,
                 nhead=n_heads,
                 dim_feedforward=n_hidden,
-                dropout=0.0,
+                dropout=dropout,
                 batch_first=True,
             ),
             num_layers=n_layers,
@@ -155,6 +157,7 @@ class TransformerPrediction(nn.Module):
 
     def forward(self, z, x_q):
         _, q_len, _ = x_q.shape
+        x_q = x_q.to(torch.float32)
         z = z.unsqueeze(1)
         z = self.context_embedding(z) if self.context_embedding else z
         x_q = self.value_embedding(x_q)
@@ -176,6 +179,156 @@ class MLPPrediction(nn.Module):
         x_q = torch.cat([z, x_q], dim=-1)
         y_q = self.mlp(x_q)
         return y_q
+
+
+####################################################
+############## Task-specific Models ################
+####################################################
+
+
+class RavenTransformerContext(nn.Module):
+    def __init__(
+        self,
+        dim,
+        n_heads,
+        n_hidden,
+        n_layers,
+        z_dim=None,
+        dropout=0.0,
+    ):
+        super().__init__()
+        self.dim = dim
+        self.z_dim = dim if z_dim is None else z_dim
+        self.context_embedding = nn.Parameter(torch.randn(dim))
+        self.context_encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=dim,
+                nhead=n_heads,
+                dim_feedforward=n_hidden,
+                dropout=dropout,
+                batch_first=True,
+            ),
+            num_layers=n_layers,
+        )
+        if self.z_dim != dim:
+            self.z_encoder = nn.Linear(dim, z_dim)
+        self.init_weights()
+
+    def init_weights(self):
+        # Xavier uniform init for the transformer
+        for p in self.context_encoder.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p)
+
+    def forward(self, x_c, y_c):
+        assert y_c is None
+        c_token = (
+            self.context_embedding.unsqueeze(0)
+            .unsqueeze(0)
+            .expand(x_c.shape[0], -1, -1)
+        )
+        z = torch.cat([c_token, x_c], dim=1)
+        z = self.context_encoder(z)[:, 0]
+        if self.z_dim != self.dim:
+            z = self.z_encoder(z)
+        return z
+
+
+class RavenTransformerPrediction(nn.Module):
+    def __init__(
+        self,
+        dim,
+        n_heads,
+        n_hidden,
+        n_layers,
+        z_dim=None,
+        dropout=0.0,
+    ):
+        super().__init__()
+        self.dim = dim
+        self.z_dim = dim if z_dim is None else z_dim
+        if self.z_dim != dim:
+            self.context_embedding = nn.Linear(z_dim, dim)
+        else:
+            self.context_embedding = None
+        self.prediction_encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=dim,
+                nhead=n_heads,
+                dim_feedforward=n_hidden,
+                dropout=dropout,
+                batch_first=True,
+            ),
+            num_layers=n_layers,
+        )
+        self.init_weights()
+
+    def init_weights(self):
+        for p in self.prediction_encoder.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p)
+
+    def forward(self, z, x_q):
+        z = z.unsqueeze(1)
+        z = self.context_embedding(z) if self.context_embedding else z
+        pred_input = torch.cat([z, x_q], dim=1)
+        y_q = self.prediction_encoder(pred_input)[:, -1:]
+        return y_q
+
+
+class RavenMLPPrediction(nn.Module):
+    def __init__(self, dim, z_dim, hidden_dim):
+        super().__init__()
+        self.mlp = MLP(dim * 2 + z_dim, hidden_dim, dim)
+
+    def forward(self, z, x_q):
+        x_q = x_q.view(x_q.shape[0], 2 * x_q.shape[-1])
+        x_q = torch.cat([z, x_q], dim=-1)
+        y_q = self.mlp(x_q)
+        return y_q.unsqueeze(1)
+
+
+class RavenKnownPrediction(nn.Module):
+    rule_applications = [
+        lambda x: x[:, 0],
+        lambda x: x[:, 1] - 2,
+        lambda x: x[:, 1] - 1,
+        lambda x: x[:, 1] + 1,
+        lambda x: x[:, 1] + 2,
+        lambda x: x[:, 0] - x[:, 1],
+        lambda x: x[:, 0] + x[:, 1],
+        lambda x: x.min(dim=-1).values,
+        lambda x: x.max(dim=-1).values,
+        lambda x: x[:, 1] + 2,
+        lambda x: x[:, 1] + 1,
+        lambda x: x[:, 1] - 2,
+        lambda x: x[:, 1] - 1,
+    ]
+
+    def __init__(
+        self,
+        z_dim,
+    ):
+        super().__init__()
+        self.z_dim = z_dim
+        if z_dim != 4 * 13:
+            self.rule_encoder = nn.Linear(z_dim, 4 * 13)
+        else:
+            self.rule_encoder = nn.Identity()
+
+    def forward(self, z, x_q):
+        rule_probs = self.rule_encoder(z).view(-1, 4, 13)
+        rule_probs = torch.softmax(rule_probs, dim=-1)
+        y_q = torch.stack(
+            [
+                torch.stack([f(x_q[:, :, i]) for i in range(4)], dim=-1)
+                for f in self.rule_applications
+            ],
+            dim=-1,
+        )
+        y_q *= rule_probs
+        y_q = y_q.sum(dim=-1)
+        return y_q.unsqueeze(1)
 
 
 class LinRegPrediction(nn.Module):
@@ -270,6 +423,7 @@ class ScrambledTransformerPrediction(nn.Module):
         n_hidden,
         n_layers,
         cross_attention=False,
+        dropout=0.0,
     ):
         super().__init__()
 
@@ -293,7 +447,7 @@ class ScrambledTransformerPrediction(nn.Module):
                 d_model=n_features,
                 nhead=n_heads,
                 dim_feedforward=n_hidden,
-                dropout=0.0,
+                dropout=dropout,
                 batch_first=True,
             ),
             num_layers=n_layers,

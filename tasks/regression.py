@@ -3,7 +3,7 @@ from lightning import LightningModule
 from matplotlib import pyplot as plt
 from models.implicit import ImplicitModel
 from models.explicit import ExplicitModel, ExplicitModelWith, SinRegPrediction
-from data.regression import SinusoidalRegressionDataset, GPRegressionDataset
+from data.regression import SinusoidalRegressionDataset, GPRegressionDataset, HHRegressionDataset
 from tasks.utils import fig2img
 
 
@@ -86,6 +86,10 @@ class RegressionICL(LightningModule):
             )
             x = x[0]
             x, y = x.to(self.device), y.to(self.device)
+        elif isinstance(dataset, HHRegressionDataset):
+            (x_c, y_c), (x_q, y_q), w = dataset.get_batch(n_context=dataset.max_context)
+            x = dataset.x_points.to(self.device)
+            y = dataset.function(x.view(1, -1, 1).repeat(x_c.shape[0], 1, 1), w)
         else:
             (x_c, y_c), (x_q, y_q), w = dataset.get_batch(n_context=dataset.max_context)
             w = w.to(self.device)
@@ -116,6 +120,8 @@ class RegressionICL(LightningModule):
             ax.scatter(x_q[i, :, 0], y_q[i, :, 0], label="Query", s=10, c="red")
             ax.set(xlabel="x", ylabel="y")
             ax.legend(loc="upper left")
+            if isinstance(dataset, HHRegressionDataset):
+                ax.set_ylim([-100,50])
         fig.tight_layout()
 
         self.logger.log_image(f"examples/{stage}", [fig2img(fig)])
