@@ -37,7 +37,7 @@ class RegressionICL(LightningModule):
         y_q_pred, z = self.model(x_c, y_c, x_q)
         y_q_loss = torch.nn.functional.mse_loss(y_q_pred, y_q)
         val_style = list(self.trainer.datamodule.val_data.keys())[dataloader_idx]
-        if z is not None:
+        if z is not None and self.w_predictor is not None:
             w_pred = self.w_predictor(z).view(*w.shape)
             w_loss = torch.nn.functional.mse_loss(w_pred, w)
             self.log(

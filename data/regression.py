@@ -249,6 +249,7 @@ class MLPRegressionDataset(RegressionDataset):
         elif activation == "tanh":
             self.activation = torch.nn.Tanh()
 
+        self.get_model()
         if self.finite:
             self.generate_finite_data()
         self.n_params = (
