@@ -12,6 +12,7 @@ class RegressionICL(LightningModule):
         self,
         model: ImplicitModel | ExplicitModel,
         lr: float = 1e-4,
+        weight_decay: float = 0.0
     ):
         super().__init__()
         self.save_hyperparameters(ignore="model")
@@ -142,7 +143,7 @@ class RegressionICL(LightningModule):
                     "lr": self.hparams.lr * 10,
                 }
             ]
-        return torch.optim.Adam(param_groups, lr=self.hparams.lr)
+        return torch.optim.Adam(param_groups, lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
 
     def on_validation_start(self):
         # If we're using a known sinusoidal prediction model with fixed frequencies,
