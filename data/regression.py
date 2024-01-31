@@ -448,7 +448,7 @@ class HHRegressionDataset(RegressionDataset):
 
         assert self.x_dim == 1
         self.n_params = 2
-        with open('hh_data.pkl', 'rb') as f:
+        with open('data/hh_data.pkl', 'rb') as f:
             self.data, self.params_list = pickle.load(f).values()
         self.params_list = torch.stack([torch.stack(list(self.params_list[i].values())) for i in range(len(self.params_list))])
         self.simulation_timesteps = self.data.shape[1]
@@ -460,11 +460,11 @@ class HHRegressionDataset(RegressionDataset):
 
     def sample_x(self, n_context):
         x_c = torch.zeros((self.batch_size, n_context, self.x_dim)).uniform_(0, 250).int()
-        #x_c = (torch.randn(self.batch_size, n_context, self.x_dim) * 100).int().abs()
+        #x_c = (torch.randn(self.batch_size, n_context, self.x_dim) * 200).int().abs()
         if self.context_style == "same":
             x_q = x_c = torch.zeros((self.batch_size, n_context, self.x_dim)).uniform_(0, 250).int()
         elif self.context_style == "near":
-            x_q = (x_c + 10 * torch.randn_like(x_c)).int()
+            x_q = (x_c + 10.0 * torch.randn(x_c.size())).int()
         else:
             raise ValueError("Invalid context style")
         
@@ -490,8 +490,8 @@ class HHRegressionDataset(RegressionDataset):
 
         with isolate_rng():
             torch.manual_seed(0)
-            #self.fixed_x_c = (torch.randn(self.data_size, self.max_context, self.x_dim) * 100).int().abs()
-            #self.fixed_x_q = (torch.randn(self.data_size, self.max_context, self.x_dim) * 100).int().abs()
+            #self.fixed_x_c = (torch.randn(self.data_size, self.max_context, self.x_dim) * 200).int().abs()
+            #self.fixed_x_q = (torch.randn(self.data_size, self.max_context, self.x_dim) * 200).int().abs()
             self.fixed_x_c = torch.zeros((self.data_size, self.max_context, self.x_dim)).uniform_(0, 250).int()
             self.fixed_x_q = torch.zeros((self.data_size, self.max_context, self.x_dim)).uniform_(0, 250).int()
 
@@ -499,11 +499,9 @@ class HHRegressionDataset(RegressionDataset):
                 if self.ood_style == "wide":
                     self.fixed_x_q *= 3
                 elif self.ood_style == "far":
-                    direction = torch.randn(self.fixed_x_q.shape)
                     self.fixed_x_q = (
-                        self.fixed_x_q
-                        + (10.0 * direction / direction.norm(dim=-1, keepdim=True)).to(int)
-                    )
+                        self.fixed_x_q * 0.2 + 750
+                    ).to(int)
             self.fixed_x_c = self.fixed_x_c.clamp(min=0, max=self.simulation_timesteps - 1).to(int)
             self.fixed_x_q = self.fixed_x_q.clamp(min=0, max=self.simulation_timesteps - 1).to(int)
 
