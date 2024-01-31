@@ -55,8 +55,8 @@ class ClassificationICL(LightningModule):
         if self.trainer.current_epoch % 10 == 0:
             self.eval()
             self.plot_model("train")
-            self.plot_model("val")
-            self.plot_model("ood_val")
+            for val_style in self.trainer.datamodule.val_data.keys():
+                self.plot_model(val_style)
             self.train()
 
     @torch.inference_mode()
@@ -72,12 +72,9 @@ class ClassificationICL(LightningModule):
             return
         if stage == "train":
             dataset = self.trainer.datamodule.train_data
-        elif stage == "val":
-            dataset = self.trainer.datamodule.val_data
-        elif stage == "ood_val":
-            dataset = self.trainer.datamodule.ood_val_data
         else:
-            raise ValueError(f"Invalid dataset: {dataset}")
+            dataset = self.trainer.datamodule.val_data[stage]
+            stage = f"val_{stage}"
 
         (x_c, y_c), (x_q, y_q), w = dataset.get_batch(
             n_context=dataset.max_context
@@ -99,9 +96,9 @@ class ClassificationICL(LightningModule):
         fig, axs = plt.subplots(1, n_examples, figsize=(4 * n_examples, 4))
         for i, ax in enumerate(axs):
             ax.contourf(xx, yy, ypred[i, :, 0].view(xx.shape), cmap='RdBu', levels=levels, vmax=1., vmin=0., label="Model")
-            ax.scatter(x_c[i, :, 0], x_c[i, :, 1], c=y_c[i, :], marker='.', label="Context", s=10)
-            ax.scatter(x_q[i, :, 0], x_q[i, :, 1], c=y_q[i, :], marker='*', label="Query", s=10)
-            ax.legend(loc="upper left")
+            # ax.scatter(x_c[i, :, 0], x_c[i, :, 1], c=y_c[i, :], marker='.', label="Context", s=10)
+            ax.scatter(x_q[i, :, 0], x_q[i, :, 1], c=y_q[i, :], marker='*', s=20)
+            # ax.legend(loc="upper left")
         fig.tight_layout()
 
         self.logger.log_image(f"examples/{stage}", [fig2img(fig)])
