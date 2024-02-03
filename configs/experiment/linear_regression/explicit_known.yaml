@@ -1,5 +1,5 @@
 dataset: linear-regression
-model: explicit-affine
+model: explicit-known
 
 task:
   _target_: tasks.regression.RegressionICL
