@@ -1,0 +1,1 @@
+python train.py --multirun hydra/launcher=mila_eric save_dir=/home/mila/e/eric.elmoznino/scratch/explicit_implicit_icl/logs experiment=mlp_regression/implicit,mlp_regression/explicit_tsf,mlp_regression/explicit_mlp ++experiment.data.x_dim=100 ++experiment.data.context_style=same,near seed=0,1,2,3,4 ++experiment.callbacks=False
