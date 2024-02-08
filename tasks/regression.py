@@ -3,7 +3,7 @@ from lightning import LightningModule
 from matplotlib import pyplot as plt
 from models.implicit import ImplicitModel
 from models.explicit import ExplicitModel, ExplicitModelWith, SinRegPrediction
-from data.regression import SinusoidalRegressionDataset, GPRegressionDataset
+from data.regression import SinusoidalRegressionDataset, GPRegressionDataset, HHRegressionDataset
 from tasks.utils import fig2img
 
 
@@ -12,6 +12,7 @@ class RegressionICL(LightningModule):
         self,
         model: ImplicitModel | ExplicitModel,
         lr: float = 1e-4,
+        weight_decay: float = 0.0
     ):
         super().__init__()
         self.save_hyperparameters(ignore="model")
@@ -37,7 +38,7 @@ class RegressionICL(LightningModule):
         y_q_pred, z = self.model(x_c, y_c, x_q)
         y_q_loss = torch.nn.functional.mse_loss(y_q_pred, y_q)
         val_style = list(self.trainer.datamodule.val_data.keys())[dataloader_idx]
-        if z is not None:
+        if z is not None and self.w_predictor is not None:
             w_pred = self.w_predictor(z).view(*w.shape)
             w_loss = torch.nn.functional.mse_loss(w_pred, w)
             self.log(
@@ -86,6 +87,10 @@ class RegressionICL(LightningModule):
             )
             x = x[0]
             x, y = x.to(self.device), y.to(self.device)
+        elif isinstance(dataset, HHRegressionDataset):
+            (x_c, y_c), (x_q, y_q), w = dataset.get_batch(n_context=dataset.max_context)
+            x = dataset.x_points.to(self.device)
+            y = dataset.function(x.view(1, -1, 1).repeat(x_c.shape[0], 1, 1), w)
         else:
             (x_c, y_c), (x_q, y_q), w = dataset.get_batch(n_context=dataset.max_context)
             w = w.to(self.device)
@@ -116,6 +121,8 @@ class RegressionICL(LightningModule):
             ax.scatter(x_q[i, :, 0], y_q[i, :, 0], label="Query", s=10, c="red")
             ax.set(xlabel="x", ylabel="y")
             ax.legend(loc="upper left")
+            if isinstance(dataset, HHRegressionDataset):
+                ax.set_ylim([-100,50])
         fig.tight_layout()
 
         self.logger.log_image(f"examples/{stage}", [fig2img(fig)])
@@ -136,7 +143,7 @@ class RegressionICL(LightningModule):
                     "lr": self.hparams.lr * 10,
                 }
             ]
-        return torch.optim.Adam(param_groups, lr=self.hparams.lr)
+        return torch.optim.Adam(param_groups, lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
 
     def on_validation_start(self):
         # If we're using a known sinusoidal prediction model with fixed frequencies,

@@ -1,4 +1,5 @@
 import hydra
+from omegaconf import OmegaConf
 from lightning import Trainer, seed_everything
 
 
@@ -16,12 +17,20 @@ def train(cfg):
     )
 
     # Add experiment metadata to the logger
-    logger.experiment.config.update(
-        {
-            "dataset": cfg.experiment.dataset,
-            "model": cfg.experiment.model,
-        }
-    )
+    if logger:
+        logger.experiment.config.update(
+            {
+                "dataset": cfg.experiment.dataset,
+                "model": cfg.experiment.model,
+            }
+        )
+        logger.experiment.config.update(
+            {
+                "model_config": OmegaConf.to_container(
+                    cfg.experiment.task.model, resolve=True
+                )
+            }
+        )
 
     trainer = Trainer(
         logger=logger,

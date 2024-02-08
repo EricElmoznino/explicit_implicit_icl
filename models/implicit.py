@@ -23,6 +23,7 @@ class TransformerImplicit(ImplicitModel):
         n_hidden,
         n_layers,
         input_has_y=True,
+        dropout=0.0,
     ):
         super().__init__()
 
@@ -42,7 +43,7 @@ class TransformerImplicit(ImplicitModel):
                 d_model=n_features,
                 nhead=n_heads,
                 dim_feedforward=n_hidden,
-                dropout=0.0,
+                dropout=dropout,
                 batch_first=True,
             ),
             num_layers=n_layers,
@@ -83,6 +84,47 @@ class TransformerImplicit(ImplicitModel):
 
         y_q = self.encoder(xy, mask=src_mask)[:, -q_len:]
         y_q = self.prediction_head(y_q)
+        return y_q
+
+
+####################################################
+############## Task-specific Models ################
+####################################################
+
+
+class RavenTransformerImplicit(ImplicitModel):
+    def __init__(
+        self,
+        dim,
+        n_heads,
+        n_hidden,
+        n_layers,
+        dropout=0.0,
+    ):
+        super().__init__()
+        self.dim = dim
+        self.encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=dim,
+                nhead=n_heads,
+                dim_feedforward=n_hidden,
+                dropout=dropout,
+                batch_first=True,
+            ),
+            num_layers=n_layers,
+        )
+        self.init_weights()
+
+    def init_weights(self):
+        # Xavier uniform init for the transformer
+        for p in self.encoder.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p)
+
+    def yq_given_d(self, x_c, y_c, x_q):
+        assert y_c is None
+        x = torch.cat([x_c, x_q], dim=1)
+        y_q = self.encoder(x)[:, -1:]
         return y_q
 
 

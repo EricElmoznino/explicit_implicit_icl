@@ -1,0 +1,1 @@
+python train.py --multirun hydra/launcher=mila_eric save_dir=/home/mila/e/eric.elmoznino/scratch/explicit_implicit_icl/logs experiment=raven/implicit ++experiment.task.model.dropout=0.0,0.1,0.3 logger.tags=[implicit_sweep]

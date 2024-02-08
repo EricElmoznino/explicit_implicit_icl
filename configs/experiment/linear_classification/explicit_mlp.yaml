@@ -1,4 +1,4 @@
-dataset: linear-regression
+dataset: linear-classification
 model: explicit-mlp
 
 task:
@@ -31,7 +31,7 @@ data:
   batch_size: 128
   train_size: 1000
   val_size: 1000
-  noise: 0.1
+  temperature: 0.1
   context_style: "same"
   ood_styles: ["far", "wide"]
 
