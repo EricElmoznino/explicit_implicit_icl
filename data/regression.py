@@ -7,7 +7,6 @@ import torch
 from torch import FloatTensor
 from torch.utils.data import DataLoader
 from torchdata.datapipes.iter import IterDataPipe
-from torchdiffeq import odeint
 
 from lightning import LightningDataModule
 from lightning.pytorch.utilities.seed import isolate_rng
@@ -54,7 +53,7 @@ class RegressionDataModule(LightningDataModule):
             "linear": LinearRegressionDataset,
             "mlp": MLPRegressionDataset,
             "gp": GPRegressionDataset,
-            "hh": HHRegressionDataset
+            "hh": HHRegressionDataset,
         }[kind]
         self.train_data = RegressionDatasetCls(
             x_dim=x_dim,
@@ -164,7 +163,15 @@ class RegressionDataset(ABC, IterDataPipe):
             return (x_c, y_c), (x_q, y_q), params
         else:
             if return_vis:
-                return (x_c, y_c), (x_q, y_q), None, (self.fixed_x_vis[: self.batch_size], self.fixed_y_vis[: self.batch_size])
+                return (
+                    (x_c, y_c),
+                    (x_q, y_q),
+                    None,
+                    (
+                        self.fixed_x_vis[: self.batch_size],
+                        self.fixed_y_vis[: self.batch_size],
+                    ),
+                )
             else:
                 return (x_c, y_c), (x_q, y_q), None
 
@@ -409,10 +416,17 @@ class GPRegressionDataset(RegressionDataset):
                     self.fixed_x[:, self.max_context :] = self.fixed_x[
                         :, self.max_context :
                     ] * 0.1 + 3.0 * direction / direction.norm(dim=-1, keepdim=True)
-            self.fixed_x_vis = torch.linspace(self.fixed_x.min(), self.fixed_x.max(), 100).view(1, 100, self.x_dim).repeat(self.data_size, 1, 1)
+            self.fixed_x_vis = (
+                torch.linspace(self.fixed_x.min(), self.fixed_x.max(), 100)
+                .view(1, 100, self.x_dim)
+                .repeat(self.data_size, 1, 1)
+            )
             x_temp = torch.cat([self.fixed_x, self.fixed_x_vis], dim=1)
             y_temp = self.function(x_temp)
-            self.fixed_y, self.fixed_y_vis = y_temp[:, :2 * self.max_context], y_temp[:, 2 * self.max_context:]
+            self.fixed_y, self.fixed_y_vis = (
+                y_temp[:, : 2 * self.max_context],
+                y_temp[:, 2 * self.max_context :],
+            )
 
             self.fixed_x_c = self.fixed_x[:, : self.max_context]
             self.fixed_x_q = self.fixed_x[:, self.max_context :]
@@ -431,11 +445,15 @@ class GPRegressionDataset(RegressionDataset):
         x_c, x_q = self.sample_x(n_context)
         x = torch.cat([x_c, x_q], dim=1)
         if return_vis:
-            x_vis = torch.linspace(x.min(), x.max(), 100).view(1, 100, x_c.shape[-1]).repeat(x_c.shape[0], 1, 1)
+            x_vis = (
+                torch.linspace(x.min(), x.max(), 100)
+                .view(1, 100, x_c.shape[-1])
+                .repeat(x_c.shape[0], 1, 1)
+            )
             x = torch.cat([x, x_vis], dim=1)
         y = self.function(x)
         if return_vis:
-            y, y_vis = y[:, :2 * n_context], y[:, 2 * n_context:]
+            y, y_vis = y[:, : 2 * n_context], y[:, 2 * n_context :]
         y_c, y_q = y[:, :n_context], y[:, n_context:]
         if return_vis:
             return (x_c, y_c), (x_q, y_q), None, (x_vis, y_vis)
@@ -448,27 +466,42 @@ class HHRegressionDataset(RegressionDataset):
 
         assert self.x_dim == 1
         self.n_params = 2
-        with open('data/hh_data.pkl', 'rb') as f:
+        with open("data/hh_data.pkl", "rb") as f:
             self.data, self.params_list = pickle.load(f).values()
-        self.params_list = torch.stack([torch.stack(list(self.params_list[i].values())) for i in range(len(self.params_list))])
+        self.params_list = torch.stack(
+            [
+                torch.stack(list(self.params_list[i].values()))
+                for i in range(len(self.params_list))
+            ]
+        )
         self.simulation_timesteps = self.data.shape[1]
-        self.x_points = torch.linspace(0,1000,1000)
-        self.x_points_dict  = {self.x_points[i].item(): i for i in(range(len(self.x_points)))}
+        self.x_points = torch.linspace(0, 1000, 1000)
+        self.x_points_dict = {
+            self.x_points[i].item(): i for i in (range(len(self.x_points)))
+        }
 
         if self.finite:
             self.generate_finite_data()
 
     def sample_x(self, n_context):
-        x_c = torch.zeros((self.batch_size, n_context, self.x_dim)).uniform_(0, 250).int()
-        #x_c = (torch.randn(self.batch_size, n_context, self.x_dim) * 200).int().abs()
+        x_c = (
+            torch.zeros((self.batch_size, n_context, self.x_dim)).uniform_(0, 250).int()
+        )
+        # x_c = (torch.randn(self.batch_size, n_context, self.x_dim) * 200).int().abs()
         if self.context_style == "same":
-            x_q = x_c = torch.zeros((self.batch_size, n_context, self.x_dim)).uniform_(0, 250).int()
+            x_q = x_c = (
+                torch.zeros((self.batch_size, n_context, self.x_dim))
+                .uniform_(0, 250)
+                .int()
+            )
         elif self.context_style == "near":
             x_q = (x_c + 10.0 * torch.randn(x_c.size())).int()
         else:
             raise ValueError("Invalid context style")
-        
-        x_c, x_q = x_c.clamp(min=0, max=self.simulation_timesteps-1), x_q.clamp(min=0, max=self.simulation_timesteps-1)
+
+        x_c, x_q = x_c.clamp(min=0, max=self.simulation_timesteps - 1), x_q.clamp(
+            min=0, max=self.simulation_timesteps - 1
+        )
 
         x_c = self.x_points[x_c]
         x_q = self.x_points[x_q]
@@ -476,44 +509,59 @@ class HHRegressionDataset(RegressionDataset):
 
     def sample_function_params(self):
         # Uniform over [0,40]^2
-        return self.params_list[torch.randperm(len(self.params_list))[:self.batch_size]]
-    
+        return self.params_list[
+            torch.randperm(len(self.params_list))[: self.batch_size]
+        ]
+
     def function(self, x: torch.Tensor, params) -> FloatTensor:
-        # Duration can be bigger than self.simulation_timesteps 
-        x_id = x.clone().to('cpu')
+        # Duration can be bigger than self.simulation_timesteps
+        x_id = x.clone().to("cpu")
         x_id.apply_(self.x_points_dict.get)
         x_id = x_id.to(int).to(params.device)
-        params_id = torch.stack([torch.all(self.params_list == p.to('cpu'), dim=1).int().argmax() for p in params])
-        return self.data[params_id[:, None, None].to('cpu'), x_id.to('cpu')].to(x.device)
-    
+        params_id = torch.stack(
+            [
+                torch.all(self.params_list == p.to("cpu"), dim=1).int().argmax()
+                for p in params
+            ]
+        )
+        return self.data[params_id[:, None, None].to("cpu"), x_id.to("cpu")].to(
+            x.device
+        )
+
     def generate_finite_data(self):
 
         with isolate_rng():
             torch.manual_seed(0)
-            #self.fixed_x_c = (torch.randn(self.data_size, self.max_context, self.x_dim) * 200).int().abs()
-            #self.fixed_x_q = (torch.randn(self.data_size, self.max_context, self.x_dim) * 200).int().abs()
-            self.fixed_x_c = torch.zeros((self.data_size, self.max_context, self.x_dim)).uniform_(0, 250).int()
-            self.fixed_x_q = torch.zeros((self.data_size, self.max_context, self.x_dim)).uniform_(0, 250).int()
+            # self.fixed_x_c = (torch.randn(self.data_size, self.max_context, self.x_dim) * 200).int().abs()
+            # self.fixed_x_q = (torch.randn(self.data_size, self.max_context, self.x_dim) * 200).int().abs()
+            self.fixed_x_c = (
+                torch.zeros((self.data_size, self.max_context, self.x_dim))
+                .uniform_(0, 250)
+                .int()
+            )
+            self.fixed_x_q = (
+                torch.zeros((self.data_size, self.max_context, self.x_dim))
+                .uniform_(0, 250)
+                .int()
+            )
 
             if self.ood:
                 if self.ood_style == "wide":
                     self.fixed_x_q *= 3
                 elif self.ood_style == "far":
-                    self.fixed_x_q = (
-                        self.fixed_x_q * 0.2 + 750
-                    ).to(int)
-            self.fixed_x_c = self.fixed_x_c.clamp(min=0, max=self.simulation_timesteps - 1).to(int)
-            self.fixed_x_q = self.fixed_x_q.clamp(min=0, max=self.simulation_timesteps - 1).to(int)
+                    self.fixed_x_q = (self.fixed_x_q * 0.2 + 750).to(int)
+            self.fixed_x_c = self.fixed_x_c.clamp(
+                min=0, max=self.simulation_timesteps - 1
+            ).to(int)
+            self.fixed_x_q = self.fixed_x_q.clamp(
+                min=0, max=self.simulation_timesteps - 1
+            ).to(int)
 
             self.fixed_x_c = self.x_points[self.fixed_x_c]
             self.fixed_x_q = self.x_points[self.fixed_x_q]
-                
+
             self.fixed_params = self.sample_function_params()
             self.fixed_y_c = self.function(self.fixed_x_c, self.fixed_params)
             self.fixed_y_q = self.function(self.fixed_x_q, self.fixed_params)
             self.fixed_y_c += self.noise * torch.randn_like(self.fixed_y_c)
             self.fixed_y_q += self.noise * torch.randn_like(self.fixed_y_q)
-        
-    
-
-    

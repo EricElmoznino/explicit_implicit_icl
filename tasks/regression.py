@@ -2,8 +2,17 @@ import torch
 from lightning import LightningModule
 from matplotlib import pyplot as plt
 from models.implicit import ImplicitModel
-from models.explicit import ExplicitModel, ExplicitModelWith, SinRegPrediction
-from data.regression import SinusoidalRegressionDataset, GPRegressionDataset, HHRegressionDataset
+from models.explicit import (
+    ExplicitModel,
+    ExplicitModelWith,
+    KnownLatent,
+    SinRegPrediction,
+)
+from data.regression import (
+    SinusoidalRegressionDataset,
+    GPRegressionDataset,
+    HHRegressionDataset,
+)
 from tasks.utils import fig2img
 
 
@@ -12,16 +21,28 @@ class RegressionICL(LightningModule):
         self,
         model: ImplicitModel | ExplicitModel,
         lr: float = 1e-4,
-        weight_decay: float = 0.0
+        weight_decay: float = 0.0,
     ):
         super().__init__()
         self.save_hyperparameters(ignore="model")
         self.model = model
         self.w_predictor = None
+        if isinstance(model, ExplicitModelWith) and isinstance(
+            model.context_model, KnownLatent
+        ):
+            self.known_z = True
+        else:
+            self.known_z = False
+
+    def forward(self, x_c, y_c, x_q, w):
+        if self.known_z:
+            self.model.context_model.set_z(w)
+        y_q_pred, z = self.model(x_c, y_c, x_q)
+        return y_q_pred, z
 
     def training_step(self, batch, batch_idx):
         (x_c, y_c), (x_q, y_q), w = batch
-        y_q_pred, z = self.model(x_c, y_c, x_q)
+        y_q_pred, z = self.forward(x_c, y_c, x_q, w)
         y_q_loss = torch.nn.functional.mse_loss(y_q_pred, y_q)
         if z is not None and self.w_predictor is not None:
             w_pred = self.w_predictor(z.detach()).view(*w.shape)
@@ -35,7 +56,7 @@ class RegressionICL(LightningModule):
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
         (x_c, y_c), (x_q, y_q), w = batch
-        y_q_pred, z = self.model(x_c, y_c, x_q)
+        y_q_pred, z = self.forward(x_c, y_c, x_q, w)
         y_q_loss = torch.nn.functional.mse_loss(y_q_pred, y_q)
         val_style = list(self.trainer.datamodule.val_data.keys())[dataloader_idx]
         if z is not None and self.w_predictor is not None:
@@ -70,8 +91,8 @@ class RegressionICL(LightningModule):
             x_dim, y_dim = self.model.x_dim, self.model.y_dim
         elif isinstance(self.model, ExplicitModelWith):
             x_dim, y_dim = (
-                self.model.context_model.x_dim,
-                self.model.context_model.y_dim,
+                self.model.prediction_model.x_dim,
+                self.model.prediction_model.y_dim,
             )
         if x_dim > 1 or y_dim > 1 or self.logger is None:
             return
@@ -101,7 +122,7 @@ class RegressionICL(LightningModule):
         x_c, y_c, y = x_c[:n_examples], y_c[:n_examples], y[:n_examples]
 
         x_reshaped = x.view(1, -1, 1).repeat(n_examples, 1, 1).to(self.device)
-        ypred, _ = self.model(x_c, y_c, x_reshaped)
+        ypred, _ = self.forward(x_c, y_c, x_reshaped, w)
 
         x_q, y_q, x_c, x, y_c, ypred, y = (
             x_q.cpu(),
@@ -122,7 +143,7 @@ class RegressionICL(LightningModule):
             ax.set(xlabel="x", ylabel="y")
             ax.legend(loc="upper left")
             if isinstance(dataset, HHRegressionDataset):
-                ax.set_ylim([-100,50])
+                ax.set_ylim([-100, 50])
         fig.tight_layout()
 
         self.logger.log_image(f"examples/{stage}", [fig2img(fig)])
@@ -131,7 +152,7 @@ class RegressionICL(LightningModule):
         if self.trainer.datamodule.val_data["iid"].fixed_params is not None:
             if isinstance(self.model, ExplicitModelWith):
                 self.w_predictor = torch.nn.Linear(
-                    self.model.context_model.n_features,
+                    self.model.context_model.z_dim,
                     self.trainer.datamodule.train_data.n_params,
                 ).to(self.device)
 
@@ -143,7 +164,9 @@ class RegressionICL(LightningModule):
                     "lr": self.hparams.lr * 10,
                 }
             ]
-        return torch.optim.Adam(param_groups, lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
+        return torch.optim.Adam(
+            param_groups, lr=self.hparams.lr, weight_decay=self.hparams.weight_decay
+        )
 
     def on_validation_start(self):
         # If we're using a known sinusoidal prediction model with fixed frequencies,

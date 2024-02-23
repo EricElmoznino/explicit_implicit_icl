@@ -107,6 +107,22 @@ class TransformerContext(nn.Module):
         return z
 
 
+class KnownLatent(nn.Module):
+    def __init__(self, z_dim):
+        super().__init__()
+        self.z_dim = z_dim
+        self.z = None
+
+    def set_z(self, z):
+        self.z = z.detach()
+
+    def forward(self, x_c, y_c):
+        assert self.z is not None
+        z = self.z.view(x_c.shape[0], -1)
+        self.z = None
+        return z
+
+
 ####################################################
 ################ Prediction Models #################
 ####################################################
@@ -172,6 +188,9 @@ class TransformerPrediction(nn.Module):
 class MLPPrediction(nn.Module):
     def __init__(self, x_dim, y_dim, z_dim, hidden_dim):
         super().__init__()
+        self.x_dim = x_dim
+        self.y_dim = y_dim
+        self.z_dim = z_dim
         self.mlp = MLP(x_dim + z_dim, hidden_dim, y_dim)
 
     def forward(self, z, x_q):
@@ -379,6 +398,7 @@ class SinRegPrediction(nn.Module):
         self.fixed_freq = fixed_freq
         self.n_freq = n_freq
         self.x_dim = x_dim
+        self.y_dim = 1
         target_zdim = x_dim * n_freq if fixed_freq else 2 * x_dim * n_freq
         if z_dim != target_zdim:
             self.z_encoder = nn.Linear(z_dim, target_zdim)

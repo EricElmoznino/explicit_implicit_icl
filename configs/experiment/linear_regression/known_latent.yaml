@@ -1,0 +1,46 @@
+dataset: linear-regression
+model: known_latent
+
+task:
+  _target_: tasks.regression.RegressionICL
+  lr: 1e-4
+  model:
+    _target_: models.explicit.ExplicitModelWith
+    context_model:
+      _target_: models.explicit.KnownLatent
+      z_dim: 2
+    prediction_model:
+      _target_: models.explicit.TransformerPrediction
+      x_dim: 1
+      y_dim: 1
+      z_dim: ${..context_model.z_dim}
+      n_features: 256
+      n_heads: 4
+      n_hidden: 512
+      n_layers: 4
+
+data:
+  _target_: data.regression.RegressionDataModule
+  kind: linear  
+  x_dim: 1
+  y_dim: 1
+  min_context: 16
+  max_context: 128
+  batch_size: 128
+  train_size: 1000
+  val_size: 1000
+  noise: 0.1
+  context_style: "same"
+  ood_styles: ["far", "wide"]
+
+trainer:
+  max_epochs: 1000
+
+callbacks:
+  - _target_: lightning.pytorch.callbacks.ModelCheckpoint
+    monitor: "val/iid_MSE"
+    mode: "min"
+    save_last: True
+    dirpath: ${save_dir}/checkpoints/${logger.name}
+    filename: "epoch={epoch:03d}"
+    auto_insert_metric_name: True
