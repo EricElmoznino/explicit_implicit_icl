@@ -162,6 +162,7 @@ cython_debug/
 .vscode
 __pycache__
 logs/*
+checkpoints/*
 .DS_Store
 data/raven_datagen/data/*
 !.gitkeep

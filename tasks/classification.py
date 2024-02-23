@@ -2,9 +2,10 @@ import torch
 from lightning import LightningModule
 from matplotlib import pyplot as plt
 from models.implicit import ImplicitModel
-from models.explicit import ExplicitModel, ExplicitModelWith, TransformerContext
+from models.explicit import ExplicitModel, ExplicitModelWith, KnownLatent
 from tasks.utils import fig2img, make_grid
 import numpy as np
+
 
 class ClassificationICL(LightningModule):
     def __init__(
@@ -16,14 +17,29 @@ class ClassificationICL(LightningModule):
         self.save_hyperparameters(ignore="model")
         self.model = model
         self.w_predictor = None
+        if isinstance(model, ExplicitModelWith) and isinstance(
+            model.context_model, KnownLatent
+        ):
+            self.known_z = True
+        else:
+            self.known_z = False
+
+    def forward(self, x_c, y_c, x_q, w):
+        y_c = torch.nn.functional.one_hot(
+            y_c, self.trainer.datamodule.train_data.y_dim
+        ).float()
+        if self.known_z:
+            self.model.context_model.set_z(w)
+        y_q_pred, z = self.model(x_c, y_c, x_q)
+        return y_q_pred, z
 
     def training_step(self, batch, batch_idx):
         (x_c, y_c), (x_q, y_q), w = batch
         bsz, q_len, _ = x_q.shape
-
-        y_c = torch.nn.functional.one_hot(y_c, self.trainer.datamodule.train_data.y_dim).float()
-        y_q_pred, z = self.model(x_c, y_c, x_q)
-        y_q_loss = torch.nn.functional.cross_entropy(y_q_pred.view(bsz * q_len, -1), y_q.reshape(-1))
+        y_q_pred, z = self.forward(x_c, y_c, x_q, w)
+        y_q_loss = torch.nn.functional.cross_entropy(
+            y_q_pred.view(bsz * q_len, -1), y_q.reshape(-1)
+        )
         y_q_acc = (y_q_pred.argmax(dim=-1) == y_q).float().mean(dim=1).mean(dim=0)
         if z is not None:
             w_pred = self.w_predictor(z.detach()).view(*w.shape)
@@ -39,10 +55,10 @@ class ClassificationICL(LightningModule):
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
         (x_c, y_c), (x_q, y_q), w = batch
         bsz, q_len, _ = x_q.shape
-
-        y_c = torch.nn.functional.one_hot(y_c, self.trainer.datamodule.train_data.y_dim).float()
-        y_q_pred, z = self.model(x_c, y_c, x_q)
-        y_q_loss = torch.nn.functional.cross_entropy(y_q_pred.view(bsz * q_len, -1), y_q.reshape(-1))
+        y_q_pred, z = self.forward(x_c, y_c, x_q, w)
+        y_q_loss = torch.nn.functional.cross_entropy(
+            y_q_pred.view(bsz * q_len, -1), y_q.reshape(-1)
+        )
         y_q_acc = (y_q_pred.argmax(dim=-1) == y_q).float().mean(dim=1).mean(dim=0)
         if z is not None:
             w_pred = self.w_predictor(z).view(*w.shape)
@@ -65,8 +81,8 @@ class ClassificationICL(LightningModule):
             x_dim, y_dim = self.model.x_dim, self.model.y_dim
         elif isinstance(self.model, ExplicitModelWith):
             x_dim, y_dim = (
-                self.model.context_model.x_dim,
-                self.model.context_model.y_dim,
+                self.model.prediction_model.x_dim,
+                self.model.prediction_model.y_dim,
             )
         if x_dim != 2 or y_dim != 2 or self.logger is None:
             return
@@ -76,28 +92,34 @@ class ClassificationICL(LightningModule):
             dataset = self.trainer.datamodule.val_data[stage]
             stage = f"val_{stage}"
 
-        (x_c, y_c), (x_q, y_q), w = dataset.get_batch(
-            n_context=dataset.max_context
-        )
-        y_c_oh = torch.nn.functional.one_hot(y_c, self.trainer.datamodule.train_data.y_dim).float()
+        (x_c, y_c), (x_q, y_q), w = dataset.get_batch(n_context=dataset.max_context)
         (xx, yy), grid = make_grid(x_q)
-        levels = np.linspace(0., 1., 10)
+        levels = np.linspace(0.0, 1.0, 10)
 
-        x_c, y_c_oh, w = x_c.to(self.device), y_c_oh.to(self.device), w.to(self.device)
-        x_c, y_c, y_c_oh = x_c[:n_examples], y_c[:n_examples], y_c_oh[:n_examples]
+        x_c, y_c, w = x_c.to(self.device), y_c.to(self.device), w.to(self.device)
+        x_c, y_c = x_c[:n_examples], y_c[:n_examples]
 
         x_reshaped = grid.unsqueeze(0).repeat(n_examples, 1, 1).to(self.device)
-        ypred, _ = self.model(x_c, y_c_oh, x_reshaped)
+        ypred, _ = self.forward(x_c, y_c, x_reshaped, w)
         ypred = torch.softmax(ypred, dim=-1)
 
         x_c, y_c, ypred = x_c.cpu(), y_c.cpu(), ypred.cpu()
         x_q, y_q = x_q.cpu(), y_q.cpu()
-        
+
         fig, axs = plt.subplots(1, n_examples, figsize=(4 * n_examples, 4))
         for i, ax in enumerate(axs):
-            ax.contourf(xx, yy, ypred[i, :, 0].view(xx.shape), cmap='RdBu', levels=levels, vmax=1., vmin=0., label="Model")
+            ax.contourf(
+                xx,
+                yy,
+                ypred[i, :, 0].view(xx.shape),
+                cmap="RdBu",
+                levels=levels,
+                vmax=1.0,
+                vmin=0.0,
+                label="Model",
+            )
             # ax.scatter(x_c[i, :, 0], x_c[i, :, 1], c=y_c[i, :], marker='.', label="Context", s=10)
-            ax.scatter(x_q[i, :, 0], x_q[i, :, 1], c=y_q[i, :], marker='*', s=20)
+            ax.scatter(x_q[i, :, 0], x_q[i, :, 1], c=y_q[i, :], marker="*", s=20)
             # ax.legend(loc="upper left")
         fig.tight_layout()
 
@@ -106,7 +128,7 @@ class ClassificationICL(LightningModule):
     def configure_optimizers(self):
         if isinstance(self.model, ExplicitModelWith):
             self.w_predictor = torch.nn.Linear(
-                self.model.context_model.n_features,
+                self.model.context_model.z_dim,
                 self.trainer.datamodule.train_data.n_params,
             ).to(self.device)
 
