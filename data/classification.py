@@ -12,6 +12,8 @@ from lightning.pytorch.utilities.seed import isolate_rng
 import warnings
 
 from data.utils import BatchedLinear
+from data.utils_fastfood import FastfoodWrapper
+from models.utils import MLP
 
 warnings.filterwarnings("ignore", message=".*does not have many workers.*")
 warnings.filterwarnings("ignore", message=".*`IterableDataset` has `__len__` defined.*")
@@ -282,6 +284,47 @@ class MLPClassificationDataset(ClassificationDataset):
             x = x.cuda()
 
         y = self.model(x)
+        y = torch.distributions.categorical.Categorical(
+            logits=y / self.temperature
+        ).sample()
+        return y
+
+
+class MLPLowRankClassificationDataset(ClassificationDataset):
+    def __init__(
+        self,
+        low_dim: int,
+        layers: int = 1,
+        hidden_dim: int = 64,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.low_dim = low_dim
+        self.layers = layers
+        self.hidden_dim = hidden_dim
+
+        self.model = FastfoodWrapper(
+            model=MLP(self.x_dim, self.hidden_dim, self.y_dim, layers),
+            low_dim=low_dim,
+        )
+        if torch.cuda.is_available():
+            self.model = self.model.cuda()
+        if self.finite:
+            self.generate_finite_data()
+        self.n_params = low_dim
+
+    def sample_function_params(self) -> FloatTensor:
+        return torch.randn(self.batch_size, self.low_dim)
+
+    def function(self, x, params, noise=None):
+        # x: (bsz, n_samples, x_dim)
+        if torch.cuda.is_available():
+            x = x.cuda()
+        y = []
+        for i in range(x.shape[0]):
+            self.model.low_dim_params.data = params[i]
+            y.append(self.model(x[i : i + 1]))
+        y = torch.cat(y, dim=0)
         y = torch.distributions.categorical.Categorical(
             logits=y / self.temperature
         ).sample()
