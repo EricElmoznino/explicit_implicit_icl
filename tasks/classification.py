@@ -97,7 +97,7 @@ class ClassificationICL(LightningModule):
         levels = np.linspace(0.0, 1.0, 10)
 
         x_c, y_c, w = x_c.to(self.device), y_c.to(self.device), w.to(self.device)
-        x_c, y_c = x_c[:n_examples], y_c[:n_examples]
+        x_c, y_c, w = x_c[:n_examples], y_c[:n_examples], w[:n_examples]
 
         x_reshaped = grid.unsqueeze(0).repeat(n_examples, 1, 1).to(self.device)
         ypred, _ = self.forward(x_c, y_c, x_reshaped, w)

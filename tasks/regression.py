@@ -118,8 +118,13 @@ class RegressionICL(LightningModule):
             x = torch.linspace(x_q.min(), x_q.max(), 100).to(self.device)
             y = dataset.function(x.view(1, -1, 1).repeat(x_c.shape[0], 1, 1), w)
 
-        x_c, y_c = x_c.to(self.device), y_c.to(self.device)
-        x_c, y_c, y = x_c[:n_examples], y_c[:n_examples], y[:n_examples]
+        x_c, y_c, w = x_c.to(self.device), y_c.to(self.device), w.to(self.device)
+        x_c, y_c, y, w = (
+            x_c[:n_examples],
+            y_c[:n_examples],
+            y[:n_examples],
+            w[:n_examples],
+        )
 
         x_reshaped = x.view(1, -1, 1).repeat(n_examples, 1, 1).to(self.device)
         ypred, _ = self.forward(x_c, y_c, x_reshaped, w)
