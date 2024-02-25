@@ -61,12 +61,31 @@ class ClassificationICL(LightningModule):
             y_q_pred.view(bsz * q_len, -1), y_q.reshape(-1)
         )
         y_q_acc = (y_q_pred.argmax(dim=-1) == y_q).float().mean(dim=1).mean(dim=0)
+        val_style = list(self.trainer.datamodule.val_data.keys())[dataloader_idx]
         if z is not None:
             w_pred = self.w_predictor(z).view(*w.shape)
             w_loss = torch.nn.functional.mse_loss(w_pred, w)
-            self.log("val/w_loss", w_loss, on_step=False, on_epoch=True)
-        self.log("val/CE", y_q_loss, on_step=False, on_epoch=True)
-        self.log("val/Accuracy", y_q_acc, on_step=False, on_epoch=True)
+            self.log(
+                f"val/{val_style}_w_loss",
+                w_loss,
+                on_step=False,
+                on_epoch=True,
+                add_dataloader_idx=False,
+            )
+        self.log(
+            f"val/{val_style}_CE",
+            y_q_loss,
+            on_step=False,
+            on_epoch=True,
+            add_dataloader_idx=False,
+        )
+        self.log(
+            f"val/{val_style}_Accuracy",
+            y_q_acc,
+            on_step=False,
+            on_epoch=True,
+            add_dataloader_idx=False,
+        )
 
     def on_train_epoch_start(self):
         if self.trainer.current_epoch % 10 == 0:
