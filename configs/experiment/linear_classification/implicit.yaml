@@ -4,6 +4,7 @@ model: implicit
 task:
   _target_: tasks.classification.ClassificationICL
   lr: 1e-4
+  no_plot: True
   model:
     _target_: models.implicit.TransformerImplicit
     x_dim: ${...data.x_dim}

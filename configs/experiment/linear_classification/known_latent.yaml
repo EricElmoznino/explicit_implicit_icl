@@ -4,6 +4,7 @@ model: known-latent
 task:
   _target_: tasks.classification.ClassificationICL
   lr: 1e-4
+  no_plot: True
   model:
     _target_: models.explicit.ExplicitModelWith
     context_model:

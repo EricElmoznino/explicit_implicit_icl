@@ -12,6 +12,7 @@ class ClassificationICL(LightningModule):
         self,
         model: ImplicitModel | ExplicitModel,
         lr: float = 1e-4,
+        no_plot: bool = False,
     ):
         super().__init__()
         self.save_hyperparameters(ignore="model")
@@ -84,7 +85,7 @@ class ClassificationICL(LightningModule):
                 self.model.prediction_model.x_dim,
                 self.model.prediction_model.y_dim,
             )
-        if x_dim != 2 or y_dim != 2 or self.logger is None:
+        if self.hparams.no_plot or x_dim != 2 or y_dim != 2 or self.logger is None:
             return
         if stage == "train":
             dataset = self.trainer.datamodule.train_data
