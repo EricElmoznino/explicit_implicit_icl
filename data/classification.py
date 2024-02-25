@@ -26,7 +26,7 @@ def init_weights(m, std=1.0):
 
 
 class ClassificationDataModule(LightningDataModule):
-    ClassificationKind = Literal["linear", "mlp"]
+    ClassificationKind = Literal["linear", "mlp", "low_rank_mlp"]
 
     def __init__(
         self,
@@ -49,6 +49,7 @@ class ClassificationDataModule(LightningDataModule):
         ClassificationDatasetCls = {
             "linear": LinearClassificationDataset,
             "mlp": MLPClassificationDataset,
+            "low_rank_mlp": MLPLowRankClassificationDataset,
         }[kind]
         self.train_data = ClassificationDatasetCls(
             x_dim=x_dim,

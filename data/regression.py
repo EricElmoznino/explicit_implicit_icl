@@ -28,7 +28,9 @@ def init_weights(m, std=1.0):
 
 
 class RegressionDataModule(LightningDataModule):
-    RegressionKind = Literal["polynomial", "sinusoid", "linear", "mlp", "gp", "hh"]
+    RegressionKind = Literal[
+        "polynomial", "sinusoid", "linear", "mlp", "low_rank_mlp", "gp", "hh"
+    ]
 
     def __init__(
         self,
@@ -53,6 +55,7 @@ class RegressionDataModule(LightningDataModule):
             "sinusoid": SinusoidalRegressionDataset,
             "linear": LinearRegressionDataset,
             "mlp": MLPRegressionDataset,
+            "low_rank_mlp": MLPLowRankRegressionDataset,
             "gp": GPRegressionDataset,
             "hh": HHRegressionDataset,
         }[kind]

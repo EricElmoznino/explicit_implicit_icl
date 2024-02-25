@@ -8,16 +8,16 @@ task:
     _target_: models.explicit.ExplicitModelWith
     context_model:
       _target_: models.explicit.TransformerContext
-      x_dim: 2
-      y_dim: 2
+      x_dim: ${....data.x_dim}
+      y_dim: ${....data.y_dim}
       n_features: 256
       n_heads: 4
       n_hidden: 512
       n_layers: 4
     prediction_model:
       _target_: models.explicit.MLPPrediction
-      x_dim: 2
-      y_dim: 2
+      x_dim: ${....data.x_dim}
+      y_dim: ${....data.y_dim}
       z_dim: ${..context_model.n_features}
       hidden_dim: 512
 

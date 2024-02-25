@@ -11,8 +11,8 @@ task:
       z_dim: 6
     prediction_model:
       _target_: models.explicit.TransformerPrediction
-      x_dim: 2
-      y_dim: 2
+      x_dim: ${....data.x_dim}
+      y_dim: ${....data.y_dim}
       z_dim: ${..context_model.z_dim}
       n_features: 256
       n_heads: 4
