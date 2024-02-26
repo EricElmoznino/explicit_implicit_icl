@@ -8,12 +8,12 @@ task:
     _target_: models.explicit.ExplicitModelWith
     context_model:
       _target_: models.explicit.KnownLatent
-      z_dim: {....data.kind_kwargs.low_dim}
+      z_dim: ${....data.kind_kwargs.low_dim}
     prediction_model:
       _target_: models.explicit.TransformerPrediction
       x_dim: ${....data.x_dim}
       y_dim: ${....data.y_dim}
-      z_dim: {....data.kind_kwargs.low_dim}
+      z_dim: ${....data.kind_kwargs.low_dim}
       n_features: 256
       n_heads: 4
       n_hidden: 512
