@@ -42,7 +42,10 @@ class FastfoodWrapper(nn.Module):
             ]
         )
 
-    def forward(self, x: Any, low_dim_params: torch.FloatTensor) -> Any:
+    def forward(
+        self, x: torch.FloatTensor, low_dim_params: torch.FloatTensor
+    ) -> torch.FloatTensor:
+        low_dim_params = low_dim_params.to(x.device)
         for replacement in self.param_replacements:
             replacement.set_param(low_dim_params)
         model = self.model[0]
