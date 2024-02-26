@@ -62,6 +62,8 @@ class ClassificationDataModule(LightningDataModule):
             context_style=context_style,
             **kind_kwargs,
         )
+        if kind == "low_rank_mlp":
+            kind_kwargs["model"] = self.train_data.model
         self.val_data = {
             "iid": ClassificationDatasetCls(
                 x_dim=x_dim,
@@ -297,6 +299,7 @@ class MLPLowRankClassificationDataset(ClassificationDataset):
         low_dim: int,
         layers: int = 1,
         hidden_dim: int = 64,
+        model: FastfoodWrapper | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -304,10 +307,15 @@ class MLPLowRankClassificationDataset(ClassificationDataset):
         self.layers = layers
         self.hidden_dim = hidden_dim
 
-        self.model = FastfoodWrapper(
-            model=MLP(self.x_dim, self.hidden_dim, self.y_dim, layers),
-            low_dim=low_dim,
-        )
+        if model is None:
+            self.model = FastfoodWrapper(
+                model=MLP(self.x_dim, self.hidden_dim, self.y_dim, layers),
+                low_dim=low_dim,
+            )
+            if torch.cuda.is_available():
+                self.model = self.model.cuda()
+        else:
+            self.model = model
         if torch.cuda.is_available():
             self.model = self.model.cuda()
         if self.finite:
