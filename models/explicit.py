@@ -431,8 +431,7 @@ class MLPLowRankPrediction(nn.Module):
         params = self.z_encoder(z) if self.z_encoder else z
         y = []
         for i in range(x_q.shape[0]):
-            self.model.low_dim_params = params[i]
-            y.append(self.model(x_q[i]))
+            y.append(self.model(x_q[i], params[i]))
         y = torch.stack(y, dim=0)
         return y
 
