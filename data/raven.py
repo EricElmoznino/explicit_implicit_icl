@@ -6,7 +6,7 @@ import torch
 from torch import FloatTensor, LongTensor
 from torch.utils.data import DataLoader
 from torchdata.datapipes.map import MapDataPipe
-from lightning import LightningDataModule
+from pytorch_lightning import LightningDataModule
 import warnings
 
 

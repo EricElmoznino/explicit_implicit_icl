@@ -7,8 +7,8 @@ from torch import FloatTensor
 from torch.utils.data import DataLoader
 from torchdata.datapipes.iter import IterDataPipe
 
-from lightning import LightningDataModule
-from lightning.pytorch.utilities.seed import isolate_rng
+from pytorch_lightning import LightningDataModule
+from pytorch_lightning.utilities.seed import isolate_rng
 import warnings
 
 from data.utils import BatchedLinear

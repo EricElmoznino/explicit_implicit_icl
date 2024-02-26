@@ -7,8 +7,8 @@ from torch.utils.data import DataLoader
 from torchdata.datapipes.map import MapDataPipe
 import scanpy as sc
 
-from lightning import LightningDataModule
-from lightning.pytorch.utilities.seed import isolate_rng
+from pytorch_lightning import LightningDataModule
+from pytorch_lightning.utilities.seed import isolate_rng
 import warnings
 
 warnings.filterwarnings("ignore", message=".*does not have many workers.*")

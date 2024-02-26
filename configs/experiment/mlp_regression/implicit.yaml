@@ -35,7 +35,7 @@ trainer:
   max_epochs: 1000
 
 callbacks:
-  - _target_: lightning.pytorch.callbacks.ModelCheckpoint
+  - _target_: pytorch_lightning.callbacks.ModelCheckpoint
     monitor: "val/iid_MSE"
     mode: "min"
     save_last: True

@@ -1,5 +1,5 @@
 import torch
-from lightning import LightningModule
+from pytorch_lightning import LightningModule
 from matplotlib import pyplot as plt
 from models.implicit import ImplicitModel
 from models.explicit import (

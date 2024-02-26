@@ -1,7 +1,7 @@
 import torch
 from torchmetrics.regression import R2Score
 from torchmetrics.classification import MultilabelExactMatch
-from lightning import LightningModule
+from pytorch_lightning import LightningModule
 from models.implicit import ImplicitModel, MeanBaseline
 from models.explicit import ExplicitModel, ExplicitModelWith
 from data.gene_crispr import GeneCrisprDataModule

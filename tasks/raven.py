@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from torchmetrics.classification import MulticlassAccuracy, MulticlassExactMatch
-from lightning import LightningModule
+from pytorch_lightning import LightningModule
 from models.implicit import ImplicitModel
 from models.explicit import ExplicitModel, ExplicitModelWith, RavenKnownPrediction
 from data.raven import RavenDataModule

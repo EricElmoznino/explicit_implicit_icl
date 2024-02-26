@@ -1,6 +1,6 @@
 import hydra
 from omegaconf import OmegaConf
-from lightning import Trainer, seed_everything
+from pytorch_lightning import Trainer, seed_everything
 
 
 @hydra.main(config_path="./configs/", config_name="train", version_base=None)
