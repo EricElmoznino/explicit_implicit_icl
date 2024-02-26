@@ -1,5 +1,5 @@
 dataset: linear-classification
-model: explicit-transformer
+model: explicit-known
 
 task:
   _target_: tasks.classification.ClassificationICL
@@ -16,7 +16,7 @@ task:
       n_hidden: 512
       n_layers: 4
     prediction_model:
-      _target_: models.explicit.AffinePrediction
+      _target_: models.explicit.LinRegPrediction
       x_dim: ${....data.x_dim}
       y_dim: ${....data.y_dim}
       z_dim: ${..context_model.n_features}

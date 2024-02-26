@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import torch
 from torch import nn
 from models.utils import MLP
+from data.utils_fastfood import FastfoodWrapper
 import numpy as np
 
 
@@ -371,27 +372,6 @@ class LinRegPrediction(nn.Module):
         return y_q
 
 
-class AffinePrediction(nn.Module):
-    def __init__(self, x_dim, y_dim, z_dim):
-        super().__init__()
-        self.x_dim = x_dim
-        self.y_dim = y_dim
-        if z_dim != (x_dim + 1) * y_dim:
-            self.w_encoder = nn.Linear(z_dim, (x_dim + 1) * y_dim)
-        else:
-            self.w_encoder = None
-
-    def forward(self, z, x_q):
-        x_q = torch.cat([x_q, torch.ones_like(x_q[..., :1])], dim=-1)
-        if self.w_encoder:
-            w = self.w_encoder(z)
-        else:
-            w = z
-        w = w.reshape(-1, self.x_dim + 1, self.y_dim)
-        y_q = x_q @ w
-        return y_q
-
-
 class SinRegPrediction(nn.Module):
     def __init__(self, x_dim, z_dim, n_freq, fixed_freq):
         super().__init__()
@@ -429,6 +409,31 @@ class SinRegPrediction(nn.Module):
         x = torch.sin(torch.einsum("bqd,bdf->bqdf", x_q, freqs))
         y = torch.einsum("bqdf,bdf->bq", x, amplitudes)
         y = y.unsqueeze(-1)
+        return y
+
+
+class MLPLowRankPrediction(nn.Module):
+    def __init__(self, x_dim, y_dim, z_dim, low_dim):
+        super().__init__()
+        self.x_dim = x_dim
+        self.y_dim = y_dim
+        if z_dim != low_dim:
+            self.z_encoder = nn.Linear(z_dim, low_dim)
+        else:
+            self.z_encoder = None
+        self.model: FastfoodWrapper | None = None
+
+    def set_model(self, model: FastfoodWrapper):
+        self.model = model
+
+    def forward(self, z, x_q):
+        assert self.model is not None
+        params = self.z_encoder(z) if self.z_encoder else z
+        y = []
+        for i in range(x_q.shape[0]):
+            self.model.low_dim_params = params[i]
+            y.append(self.model(x_q[i]))
+        y = torch.stack(y, dim=0)
         return y
 
 

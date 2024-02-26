@@ -7,11 +7,13 @@ from models.explicit import (
     ExplicitModelWith,
     KnownLatent,
     SinRegPrediction,
+    MLPLowRankPrediction,
 )
 from data.regression import (
     SinusoidalRegressionDataset,
     GPRegressionDataset,
     HHRegressionDataset,
+    MLPLowRankRegressionDataset,
 )
 from tasks.utils import fig2img
 
@@ -174,8 +176,8 @@ class RegressionICL(LightningModule):
         )
 
     def on_validation_start(self):
-        # If we're using a known sinusoidal prediction model with fixed frequencies,
-        # we need to get the ground-truth frequencies from the dataset
+        # If we're using a known prediction model with some sampled hyperparameters,
+        # we need to get them from the dataset
         data = self.trainer.datamodule.train_data
         if (
             isinstance(self.model, ExplicitModelWith)
@@ -184,3 +186,9 @@ class RegressionICL(LightningModule):
             and data.fixed_freq
         ):
             self.model.prediction_model.set_freqs(data.freqs.to(self.device))
+        elif (
+            isinstance(self.model, ExplicitModelWith)
+            and isinstance(self.model.prediction_model, MLPLowRankPrediction)
+            and isinstance(data, MLPLowRankRegressionDataset)
+        ):
+            self.model.prediction_model.set_model(data.model.to(self.device))

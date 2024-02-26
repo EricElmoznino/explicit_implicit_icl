@@ -323,9 +323,8 @@ class MLPLowRankClassificationDataset(ClassificationDataset):
             x = x.cuda()
         y = []
         for i in range(x.shape[0]):
-            self.model.low_dim_params.data = params[i]
-            y.append(self.model(x[i : i + 1]))
-        y = torch.cat(y, dim=0)
+            y.append(self.model(x[i], params[i]))
+        y = torch.stack(y, dim=0)
         y = torch.distributions.categorical.Categorical(
             logits=y / self.temperature
         ).sample()

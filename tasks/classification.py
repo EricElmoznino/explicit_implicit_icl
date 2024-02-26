@@ -2,7 +2,13 @@ import torch
 from lightning import LightningModule
 from matplotlib import pyplot as plt
 from models.implicit import ImplicitModel
-from models.explicit import ExplicitModel, ExplicitModelWith, KnownLatent
+from models.explicit import (
+    ExplicitModel,
+    ExplicitModelWith,
+    KnownLatent,
+    MLPLowRankPrediction,
+)
+from data.classification import MLPLowRankClassificationDataset
 from tasks.utils import fig2img, make_grid
 import numpy as np
 
@@ -161,3 +167,14 @@ class ClassificationICL(LightningModule):
                 }
             ]
         return torch.optim.Adam(param_groups, lr=self.hparams.lr)
+
+    def on_validation_start(self):
+        # If we're using a known prediction model with some sampled hyperparameters,
+        # we need to get them from the dataset
+        data = self.trainer.datamodule.train_data
+        if (
+            isinstance(self.model, ExplicitModelWith)
+            and isinstance(self.model.prediction_model, MLPLowRankPrediction)
+            and isinstance(data, MLPLowRankClassificationDataset)
+        ):
+            self.model.prediction_model.set_model(data.model.to(self.device))

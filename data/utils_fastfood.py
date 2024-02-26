@@ -19,31 +19,14 @@ class FastfoodWrapper(nn.Module):
         self,
         model: nn.Module,
         low_dim: int,
-        layer_groups: list[str | list[str]] | None = None,
     ) -> None:
         """
         Wrapper to estimate the intrinsic dimensionality of the
         objective landscape for a specific task given a specific model using FastFood transform
         :param module: pytorch nn.Module to wrap
         :param low_dim: dimensionality of the low-dimensional parameters used to optimize the model
-        :param layer_groups: group layers who's parameter deltas will be scaled by learnable weights
         """
         super().__init__()
-
-        # Check that arguments are valid
-        if layer_groups is not None:
-            assert (
-                len(layer_groups) > 1
-            ), "layer_groups must contain at least two groups"
-            assert (
-                len(layer_groups) < low_dim
-            ), "low_dim must be greater than the number of layer groups"
-            for i in range(len(layer_groups)):
-                assert isinstance(layer_groups[i], list) or isinstance(
-                    layer_groups[i], str
-                ), "layer_groups must be a list of lists"
-                if isinstance(layer_groups[i], str):
-                    layer_groups[i] = [layer_groups[i]]
 
         # Hide this from inspection by get_parameters()
         model = deepcopy(model).eval()
@@ -53,53 +36,18 @@ class FastfoodWrapper(nn.Module):
         self.low_dim = low_dim
         self.param_replacements = nn.ModuleList(
             [
-                ParamReplacement(model, param, param_name, layer_groups)
+                ParamReplacement(model, param, param_name)
                 for param_name, param in dict(model.named_parameters()).items()
                 if param.requires_grad
             ]
         )
 
-        # Parameter vector that is updated
-        # Initialized with zeros as per text: \theta^{d}
-        num_layer_groups = len(layer_groups) if layer_groups is not None else 0
-        self.low_dim_params = nn.Parameter(torch.zeros(low_dim - num_layer_groups))
-
-        # Scaler for different layer groups
-        self.group_scalers: nn.Parameter | None = None
-        if layer_groups is not None:
-            self.group_scalers = nn.Parameter(torch.ones(num_layer_groups))
-
-        # Flag for checking when to set the parameters
-        self.params_set = False
-
-    def forward(self, x: Any) -> Any:
-        """
-        Set the parameters of the model using the FastFood transform
-        if we're training so that we can get gradients on self.low_dim_params,
-        then call the model with the updated parameters.
-
-        Args:
-            x (Any): Original model's input.
-
-        Returns:
-            Any: Original model's output.
-        """
-        if self.training:  # During training the params are constantly updated
-            self.set_params()
-            self.params_set = False
-        elif not self.params_set:  # During inference the params are only set once
-            self.set_params()
-            self.params_set = True
-
-        # Pass through the model, by getting the module from a list self.model
+    def forward(self, x: Any, low_dim_params: torch.FloatTensor) -> Any:
+        for replacement in self.param_replacements:
+            replacement.set_param(low_dim_params)
         model = self.model[0]
         x = model(x)
-
         return x
-
-    def set_params(self) -> None:
-        for replacement in self.param_replacements:
-            replacement.set_param(self.low_dim_params, self.group_scalers)
 
 
 class ParamReplacement(nn.Module):
@@ -113,7 +61,6 @@ class ParamReplacement(nn.Module):
         base_module: nn.Module,
         param: nn.Parameter,
         param_name: str,
-        layer_groups: list[list[str]] | None = None,
     ) -> None:
         """
         Args:
@@ -151,22 +98,6 @@ class ParamReplacement(nn.Module):
         delattr(base_module, param_local_name)
         setattr(base_module, param_local_name, initial_value)
 
-        # Get the group index for this parameter
-        group: int | None = None
-        if layer_groups is not None:
-            layer_to_group = {
-                layer: group_idx
-                for group_idx, layer_group in enumerate(layer_groups)
-                for layer in layer_group
-            }
-            for layer, group_idx in layer_to_group.items():
-                if param_name.startswith(layer):
-                    group = group_idx
-                    break
-            assert (
-                group is not None
-            ), f"Layer containing {param_name} not found in layer_groups"
-
         # Attributes required for Fastfood transform
         self.register_buffer("initial_value", initial_value)
         self.param_dim = param_dim
@@ -180,16 +111,13 @@ class ParamReplacement(nn.Module):
         self.base_module = base_module
         self.param_name = param_name
         self.param_local_name = param_local_name
-        self.group = group
 
-    def set_param(
-        self, low_dim_params: nn.Parameter, group_scalers: nn.Parameter | None = None
-    ) -> None:
+    def set_param(self, low_dim_params: torch.FloatTensor) -> None:
         """
         Replace the parameters of the base model with the Fastfood transform projections.
 
         Args:
-            low_dim_params (nn.Parameter): Low-dimensional parameters that are projected
+            low_dim_params (torch.FloatTensor): Low-dimensional parameters that are projected
                 to the original parameter's size using the Fastfood transform.
             group_scalers (nn.Parameter | None, optional): The scalers used for each
                 layer group. Defaults to None, in which case the projections are not scaled.
@@ -204,13 +132,6 @@ class ParamReplacement(nn.Module):
         }
         delta = fastfood_torched(low_dim_params, self.param_dim, fastfood_var_dict)
         delta = delta.view(self.initial_value.size())
-
-        # Scale the delta by this parameter's group scaler
-        if group_scalers is not None:
-            assert self.group is not None
-            scaler = group_scalers[self.group]
-            delta = delta * scaler
-
         param = self.initial_value + delta
         setattr(self.base_module, self.param_local_name, param)
 
