@@ -1,5 +1,5 @@
 dataset: lowrankmlp-classification
-model: explicit-transformer
+model: explicit-known
 
 task:
   _target_: tasks.classification.ClassificationICL
