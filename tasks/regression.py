@@ -24,11 +24,14 @@ class RegressionICL(LightningModule):
         model: ImplicitModel | ExplicitModel,
         lr: float = 1e-4,
         weight_decay: float = 0.0,
+        aux_loss: bool = False
     ):
         super().__init__()
         self.save_hyperparameters(ignore="model")
         self.model = model
+        self.aux_loss = aux_loss
         self.w_predictor = None
+        self.aux_predictor = None
         if isinstance(model, ExplicitModelWith) and isinstance(
             model.context_model, KnownLatent
         ):
@@ -46,13 +49,20 @@ class RegressionICL(LightningModule):
         (x_c, y_c), (x_q, y_q), w = batch
         y_q_pred, z = self.forward(x_c, y_c, x_q, w)
         y_q_loss = torch.nn.functional.mse_loss(y_q_pred, y_q)
+        loss = y_q_loss
+
         if z is not None and self.w_predictor is not None:
             w_pred = self.w_predictor(z.detach()).view(*w.shape)
             w_loss = torch.nn.functional.mse_loss(w_pred, w.detach())
-            loss = y_q_loss + w_loss
+            loss += w_loss
+
+            if self.aux_loss:
+                aux_pred = self.aux_predictor(z).view(*w.shape)
+                aux_loss = torch.nn.functional.mse_loss(aux_pred, w)
+                loss += aux_loss
+
             self.log("train/w_MSE", w_loss, on_step=False, on_epoch=True)
-        else:
-            loss = y_q_loss
+
         self.log("train/MSE", y_q_loss, on_step=False, on_epoch=True)
         return loss
 
@@ -158,6 +168,11 @@ class RegressionICL(LightningModule):
     def configure_optimizers(self):
         if self.trainer.datamodule.val_data["iid"].fixed_params is not None:
             if isinstance(self.model, ExplicitModelWith):
+                if self.aux_loss:
+                    self.aux_predictor = torch.nn.Linear(
+                        self.model.context_model.z_dim,
+                        self.trainer.datamodule.train_data.n_params,
+                    ).to(self.device)
                 self.w_predictor = torch.nn.Linear(
                     self.model.context_model.z_dim,
                     self.trainer.datamodule.train_data.n_params,
@@ -171,6 +186,15 @@ class RegressionICL(LightningModule):
                     "lr": self.hparams.lr * 10,
                 }
             ]
+
+        if self.aux_predictor is not None:
+            param_groups += [
+                {
+                    "params": self.aux_predictor.parameters(),
+                    "lr": self.hparams.lr,
+                }
+            ]
+
         return torch.optim.Adam(
             param_groups, lr=self.hparams.lr, weight_decay=self.hparams.weight_decay
         )

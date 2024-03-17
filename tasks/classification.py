@@ -19,11 +19,14 @@ class ClassificationICL(LightningModule):
         model: ImplicitModel | ExplicitModel,
         lr: float = 1e-4,
         no_plot: bool = False,
+        aux_loss: bool = False
     ):
         super().__init__()
         self.save_hyperparameters(ignore="model")
         self.model = model
+        self.aux_loss = aux_loss
         self.w_predictor = None
+        self.aux_predictor = None
         if isinstance(model, ExplicitModelWith) and isinstance(
             model.context_model, KnownLatent
         ):
@@ -48,13 +51,19 @@ class ClassificationICL(LightningModule):
             y_q_pred.view(bsz * q_len, -1), y_q.reshape(-1)
         )
         y_q_acc = (y_q_pred.argmax(dim=-1) == y_q).float().mean(dim=1).mean(dim=0)
+        loss = y_q_loss
         if z is not None:
             w_pred = self.w_predictor(z.detach()).view(*w.shape)
             w_loss = torch.nn.functional.mse_loss(w_pred, w)
-            loss = y_q_loss + w_loss
+            loss += w_loss
+
+            if self.aux_loss:
+                aux_pred = self.aux_predictor(z).view(*w.shape)
+                aux_loss = torch.nn.functional.mse_loss(aux_pred, w)
+                loss += aux_loss
+
             self.log("train/w_MSE", w_loss, on_step=False, on_epoch=True)
-        else:
-            loss = y_q_loss
+
         self.log("train/CE", y_q_loss, on_step=False, on_epoch=True)
         self.log("train/Accuracy", y_q_acc, on_step=False, on_epoch=True)
         return loss
@@ -153,6 +162,11 @@ class ClassificationICL(LightningModule):
 
     def configure_optimizers(self):
         if isinstance(self.model, ExplicitModelWith):
+            if self.aux_loss:
+                self.aux_predictor = torch.nn.Linear(
+                    self.model.context_model.z_dim,
+                    self.trainer.datamodule.train_data.n_params,
+                ).to(self.device)
             self.w_predictor = torch.nn.Linear(
                 self.model.context_model.z_dim,
                 self.trainer.datamodule.train_data.n_params,
@@ -164,6 +178,14 @@ class ClassificationICL(LightningModule):
                 {
                     "params": self.w_predictor.parameters(),
                     "lr": self.hparams.lr * 10,
+                }
+            ]
+
+        if self.aux_predictor is not None:
+            param_groups += [
+                {
+                    "params": self.aux_predictor.parameters(),
+                    "lr": self.hparams.lr,
                 }
             ]
         return torch.optim.Adam(param_groups, lr=self.hparams.lr)

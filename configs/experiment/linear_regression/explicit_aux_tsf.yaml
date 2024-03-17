@@ -1,0 +1,52 @@
+dataset: linear-regression
+model: explicit-transformer
+
+task:
+  _target_: tasks.regression.RegressionICL
+  lr: 1e-4
+  aux_loss: True
+  model:
+    _target_: models.explicit.ExplicitModelWith
+    context_model:
+      _target_: models.explicit.TransformerContext
+      x_dim: ${....data.x_dim}
+      y_dim: ${....data.y_dim}
+      n_features: 256
+      n_heads: 4
+      n_hidden: 512
+      n_layers: 4
+    prediction_model:
+      _target_: models.explicit.TransformerPrediction
+      x_dim: ${....data.x_dim}
+      y_dim: ${....data.y_dim}
+      z_dim: ${.n_features}
+      n_features: 256
+      n_heads: 4
+      n_hidden: 512
+      n_layers: 4
+
+data:
+  _target_: data.regression.RegressionDataModule
+  kind: linear  
+  x_dim: 1
+  y_dim: 1
+  min_context: 16
+  max_context: 128
+  batch_size: 128
+  train_size: 1000
+  val_size: 1000
+  noise: 0.1
+  context_style: "same"
+  ood_styles: ["far", "wide"]
+
+trainer:
+  max_epochs: 1000
+
+callbacks:
+  - _target_: pytorch_lightning.callbacks.ModelCheckpoint
+    monitor: "val/iid_MSE"
+    mode: "min"
+    save_last: True
+    dirpath: ${save_dir}/checkpoints/${logger.name}
+    filename: "epoch={epoch:03d}"
+    auto_insert_metric_name: True
