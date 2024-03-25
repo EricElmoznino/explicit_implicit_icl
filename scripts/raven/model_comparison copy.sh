@@ -1,1 +1,0 @@
-python train.py --multirun hydra/launcher=mila_eric save_dir=/home/mila/e/eric.elmoznino/scratch/explicit_implicit_icl/logs experiment=raven/implicit,raven/explicit_tsf,raven/explicit_mlp,raven/explicit_known,raven/explicit_aux_tsf ++experiment.data.setting=inpo,expo-l1,expo-l2 seed=0,1,2,3,4
