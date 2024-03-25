@@ -1,4 +1,4 @@
-dataset: linear-regression
+dataset: sinusoid-regression
 model: explicit-aux-transformer
 
 task:
@@ -9,16 +9,16 @@ task:
     _target_: models.explicit.ExplicitModelWith
     context_model:
       _target_: models.explicit.TransformerContext
-      x_dim: ${....data.x_dim}
-      y_dim: ${....data.y_dim}
+      x_dim: 1
+      y_dim: 1
       n_features: 256
       n_heads: 4
       n_hidden: 512
       n_layers: 4
     prediction_model:
       _target_: models.explicit.TransformerPrediction
-      x_dim: ${....data.x_dim}
-      y_dim: ${....data.y_dim}
+      x_dim: 1
+      y_dim: 1
       z_dim: ${.n_features}
       n_features: 256
       n_heads: 4
@@ -27,15 +27,18 @@ task:
 
 data:
   _target_: data.regression.RegressionDataModule
-  kind: linear  
+  kind: sinusoid  
   x_dim: 1
   y_dim: 1
+  kind_kwargs:
+    fixed_freq: True
+    n_freq: 3
   min_context: 16
   max_context: 128
   batch_size: 128
   train_size: 1000
   val_size: 1000
-  noise: 0.1
+  noise: 0.
   context_style: "same"
   ood_styles: ["far", "wide"]
 
