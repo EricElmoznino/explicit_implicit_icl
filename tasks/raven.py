@@ -168,5 +168,5 @@ class RavenICL(LightningModule):
         if self.query_pos_encodings is not None:
             params += [self.query_pos_encodings]
         if self.rule_predictor is not None:
-            params += [self.rule_predictor.parameters()]
+            params += list(self.rule_predictor.parameters())
         return torch.optim.Adam(params, lr=self.hparams.lr)
