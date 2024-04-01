@@ -1,5 +1,5 @@
 dataset: linear-classification
-model: explicit-transformer
+model: explicit-aux-transformer
 
 task:
   _target_: tasks.classification.ClassificationICL

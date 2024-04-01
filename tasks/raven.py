@@ -15,6 +15,7 @@ class RavenICL(LightningModule):
         embedding_dim: int = 256,
         use_query_pos_encodings: bool = True,
         lr: float = 1e-4,
+        backprop_rule_pred: bool = False,
     ):
         super().__init__()
         self.save_hyperparameters(ignore="model")
@@ -61,7 +62,9 @@ class RavenICL(LightningModule):
         return sim
 
     def predict_rule(self, z) -> torch.FloatTensor:
-        rule_pred = self.rule_predictor(z.detach())
+        if not self.hparams.backprop_rule_pred:
+            z = z.detach()
+        rule_pred = self.rule_predictor(z)
         rule_pred = rule_pred.view(-1, self.n_rules, self.n_attributes)
         return rule_pred
 
@@ -164,12 +167,6 @@ class RavenICL(LightningModule):
         )
         if self.query_pos_encodings is not None:
             params += [self.query_pos_encodings]
-        param_groups = [{"params": params}]
         if self.rule_predictor is not None:
-            param_groups += [
-                {
-                    "params": self.rule_predictor.parameters(),
-                    "lr": self.hparams.lr * 10,
-                }
-            ]
-        return torch.optim.Adam(param_groups, lr=self.hparams.lr)
+            params += list(self.rule_predictor.parameters())
+        return torch.optim.Adam(params, lr=self.hparams.lr)

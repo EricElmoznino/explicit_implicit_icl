@@ -3,13 +3,12 @@ defaults:
   - experiment: null
   - hydra: default
 
-wandb_account: null
 save_dir: "logs/"
 seed: 27
 
 logger:
   _target_: pytorch_lightning.loggers.WandbLogger
-  entity: ${wandb_account}
+  entity: null
   name: ${now:%Y-%m-%d}_${now:%H-%M-%S}
   project: "Explicit-Implicit"
   save_dir: ${save_dir}
