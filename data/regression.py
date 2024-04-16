@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import pickle
-from typing import Literal, Any, Iterable
+from typing import Literal, Any
 
 import numpy as np
 import torch
@@ -45,6 +45,7 @@ class RegressionDataModule(LightningDataModule):
         noise: float = 0.5,
         context_style: str = "same",
         ood_styles: tuple[str] | None = ["far", "wide"],
+        ood_intensity: float = 3.0,
         kind_kwargs: dict[str, Any] = {},
     ):
         super().__init__()
@@ -101,6 +102,7 @@ class RegressionDataModule(LightningDataModule):
                     finite=True,
                     ood=True,
                     ood_style=style,
+                    ood_intensity=ood_intensity,
                     **kind_kwargs,
                 )
 
@@ -124,6 +126,7 @@ class RegressionDataset(ABC, IterDataPipe):
         ood: bool = False,
         context_style: str = "same",
         ood_style: str = "far",
+        ood_intensity: float = 3.0,
         finite: bool = False,
     ) -> None:
         super().__init__()
@@ -137,6 +140,7 @@ class RegressionDataset(ABC, IterDataPipe):
         self.ood = ood
         self.context_style = context_style
         self.ood_style = ood_style
+        self.ood_intensity = ood_intensity
         self.finite = finite
 
     def generate_finite_data(self):
@@ -146,12 +150,14 @@ class RegressionDataset(ABC, IterDataPipe):
             self.fixed_x_q = torch.randn(self.data_size, self.max_context, self.x_dim)
             if self.ood:
                 if self.ood_style == "wide":
-                    self.fixed_x_q *= 3.0
+                    self.fixed_x_q *= self.ood_intensity
                 elif self.ood_style == "far":
                     direction = torch.randn_like(self.fixed_x_q)
                     self.fixed_x_q = (
                         self.fixed_x_q * 0.1
-                        + 3.0 * direction / direction.norm(dim=-1, keepdim=True)
+                        + self.ood_intensity
+                        * direction
+                        / direction.norm(dim=-1, keepdim=True)
                     )
             self.fixed_params = self.sample_function_params()
             self.fixed_y_c = self.function(self.fixed_x_c, self.fixed_params)
