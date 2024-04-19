@@ -41,6 +41,7 @@ class RegressionDataModule(LightningDataModule):
         max_context: int,
         batch_size: int = 128,
         train_size: int = 10000,
+        finite_train: bool = False,
         val_size: int = 100,
         noise: float = 0.5,
         context_style: str = "same",
@@ -69,6 +70,7 @@ class RegressionDataModule(LightningDataModule):
             data_size=train_size,
             noise=noise,
             context_style=context_style,
+            finite=finite_train,
             **kind_kwargs,
         )
         if kind == "low_rank_mlp":
@@ -144,26 +146,24 @@ class RegressionDataset(ABC, IterDataPipe):
         self.finite = finite
 
     def generate_finite_data(self):
-        with isolate_rng():
-            torch.manual_seed(0)
-            self.fixed_x_c = torch.randn(self.data_size, self.max_context, self.x_dim)
-            self.fixed_x_q = torch.randn(self.data_size, self.max_context, self.x_dim)
-            if self.ood:
-                if self.ood_style == "wide":
-                    self.fixed_x_q *= self.ood_intensity
-                elif self.ood_style == "far":
-                    direction = torch.randn_like(self.fixed_x_q)
-                    self.fixed_x_q = (
-                        self.fixed_x_q * 0.1
-                        + self.ood_intensity
-                        * direction
-                        / direction.norm(dim=-1, keepdim=True)
-                    )
-            self.fixed_params = self.sample_function_params()
-            self.fixed_y_c = self.function(self.fixed_x_c, self.fixed_params)
-            self.fixed_y_q = self.function(self.fixed_x_q, self.fixed_params)
-            self.fixed_y_c += self.noise * torch.randn_like(self.fixed_y_c)
-            self.fixed_y_q += self.noise * torch.randn_like(self.fixed_y_q)
+        self.fixed_x_c = torch.randn(self.data_size, self.max_context, self.x_dim)
+        self.fixed_x_q = torch.randn(self.data_size, self.max_context, self.x_dim)
+        if self.ood:
+            if self.ood_style == "wide":
+                self.fixed_x_q *= self.ood_intensity
+            elif self.ood_style == "far":
+                direction = torch.randn_like(self.fixed_x_q)
+                self.fixed_x_q = (
+                    self.fixed_x_q * 0.1
+                    + self.ood_intensity
+                    * direction
+                    / direction.norm(dim=-1, keepdim=True)
+                )
+        self.fixed_params = self.sample_function_params()
+        self.fixed_y_c = self.function(self.fixed_x_c, self.fixed_params)
+        self.fixed_y_q = self.function(self.fixed_x_q, self.fixed_params)
+        self.fixed_y_c += self.noise * torch.randn_like(self.fixed_y_c)
+        self.fixed_y_q += self.noise * torch.randn_like(self.fixed_y_q)
 
     def sample_finite_batch(self, n_context, return_vis=False):
         x_c = self.fixed_x_c[: self.batch_size, :n_context]
