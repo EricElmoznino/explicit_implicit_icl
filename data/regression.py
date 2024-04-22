@@ -244,7 +244,7 @@ class LinearRegressionDataset(RegressionDataset):
         if self.finite:
             self.generate_finite_data()
 
-    def sample_function_params(self, n: int | None) -> FloatTensor:
+    def sample_function_params(self, n: int | None = None) -> FloatTensor:
         # Linear regression weights
         n = n if n is not None else self.batch_size
         return torch.randn(n, self.x_dim + 1, self.y_dim)
@@ -304,7 +304,7 @@ class MLPRegressionDataset(RegressionDataset):
         w = torch.cat(w, dim=-1)
         return w
 
-    def sample_function_params(self, n: int | None) -> FloatTensor:
+    def sample_function_params(self, n: int | None = None) -> FloatTensor:
         # Linear regression weights
         n = n if n is not None else self.batch_size
         if self.model is None:
@@ -348,7 +348,7 @@ class MLPLowRankRegressionDataset(RegressionDataset):
             self.generate_finite_data()
         self.n_params = low_dim
 
-    def sample_function_params(self, n: int | None) -> FloatTensor:
+    def sample_function_params(self, n: int | None = None) -> FloatTensor:
         n = n if n is not None else self.batch_size
         return torch.randn(n, self.low_dim)
 
@@ -375,7 +375,7 @@ class PolynomialRegressionDataset(RegressionDataset):
         self.w_dist = torch.distributions.normal.Normal(torch.zeros(order + 1), std)
         super().__init__(**kwargs)
 
-    def sample_function_params(self, n: int | None) -> FloatTensor:
+    def sample_function_params(self, n: int | None = None) -> FloatTensor:
         # Polynomial regression weights
         n = n if n is not None else self.batch_size
         return self.w_dist.rsample((n,))
@@ -411,7 +411,7 @@ class SinusoidalRegressionDataset(RegressionDataset):
         if self.finite:
             self.generate_finite_data()
 
-    def sample_function_params(self, n: int | None) -> FloatTensor:
+    def sample_function_params(self, n: int | None = None) -> FloatTensor:
         n = n if n is not None else self.batch_size
         amplitudes = (torch.rand(n, self.x_dim, self.n_freq) - 0.5) * 2
         if self.fixed_freq:
@@ -454,7 +454,7 @@ class GPRegressionDataset(RegressionDataset):
         if self.finite:
             self.generate_finite_data()
 
-    def sample_function_params(self, n: int | None):
+    def sample_function_params(self, n: int | None = None):
         return None
 
     def function(self, x, params=None) -> FloatTensor:
@@ -566,7 +566,7 @@ class HHRegressionDataset(RegressionDataset):
         x_q = self.x_points[x_q]
         return x_c, x_q
 
-    def sample_function_params(self, n: int | None):
+    def sample_function_params(self, n: int | None = None):
         # Uniform over [0,40]^2
         n = n if n is not None else self.batch_size
         return self.params_list[torch.randperm(len(self.params_list))[:n]]

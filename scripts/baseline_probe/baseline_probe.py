@@ -6,16 +6,15 @@ from torch.nn.functional import mse_loss
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 
-os.chrdir("../..")
-
 import sys
 import hydra
 from omegaconf import OmegaConf
 
+sys.path.append('/home/mila/l/leo.gagnon/explicit_implicit_icl')
 
 def main(experiment):
 
-    conf = OmegaConf.load(f"configs/experiment/{experiment}.yaml")
+    conf = OmegaConf.load(f"configs/experiment/{experiment}/explicit_mlp.yaml")
     dm = hydra.utils.instantiate(conf.data)
 
     data = dm.train_data
@@ -39,9 +38,13 @@ def main(experiment):
         for batch in dl:
 
             opt.zero_grad()
-
-            (x_c, y_c), (x_q, y_q), w = batch
-            c = torch.cat([x_c, y_c], dim=1).view(x_c.shape[0], -1)
+            
+            if experiment == 'raven':
+                x_c, x_q, y_q_candidates, y_q_label, rule = batch
+                c, w = x_c, rule
+            else:
+                (x_c, y_c), (x_q, y_q), w = batch
+                c = torch.cat([x_c.flatten(1), y_c.flatten(1)], dim=-1)
             w_pred = probe(c).view(*w.shape)
             loss = mse_loss(w_pred, w)
 
@@ -51,8 +54,12 @@ def main(experiment):
     # Val
     for key, dl in zip(dm.val_data.keys(), dm.val_dataloader()):
         for batch in dl:
-            (x_c, y_c), (x_q, y_q), w = batch
-            c = torch.cat([x_c, y_c], dim=1).view(x_c.shape[0], -1)
+            if experiment == 'raven':
+                x_c, x_q, y_q_candidates, y_q_label, rule = batch
+                c, w = x_c, rule
+            else:
+                (x_c, y_c), (x_q, y_q), w = batch
+                c = torch.cat([x_c.flatten(1), y_c.flatten(1)], dim=-1)
             w_pred = probe(c).view(*w.shape)
             loss = mse_loss(w_pred, w)
             print(f'{key} val loss : {loss}')
@@ -60,4 +67,4 @@ def main(experiment):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main('raven')
