@@ -24,7 +24,7 @@ task:
 
 data:
   _target_: data.raven.RavenDataModule
-  data_dir: "/home/mila/e/eric.elmoznino/scratch/explicit_implicit_icl/data/raven"
+  data_dir: "/network/scratch/l/leo.gagnon/raven"
   setting: "inpo"
   n_values: 40
   batch_size: 512
