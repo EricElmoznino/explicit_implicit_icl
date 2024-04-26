@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 
 import torch
 from torch.nn import Linear
@@ -97,7 +98,7 @@ def train_probe(experiment):
                     w_pred = probe(c.cuda()).view(*w.shape).cpu()
                     loss = mse_loss(w_pred, w)
                     key_metric += [float(loss)]
-                    
+
             metrics += [sum(key_metric) / len(key_metric)]
 
     return metrics
@@ -121,5 +122,19 @@ if __name__ == "__main__":
             seed_metrics += [train_probe(experiment)]
         all_metrics += [seed_metrics]
 
-    with open("probe_data_.json", "w") as f:
-        json.dump(all_metrics, f)
+    val_datasets = [
+        ["iid", "ood (far)", "ood (wide)"],
+        ["iid", "ood (far)", "ood (wide)"],
+        ["iid", "ood (far)", "ood (wide)"],
+        ["iid", "ood (far)", "ood (wide)"],
+        ["iid", "ood"],
+        ["iid", "ood (far)", "ood (wide)"],
+    ]
+
+    rows = []
+    for e in range(6):
+        for s in range(5):
+            for v in range(len(val_datasets[e])):
+                rows.append([experiments[e], s, val_datasets[e][v], all_metrics[e][s][v]])
+    df = pd.DataFrame(rows, columns=['train_data', 'seed', 'val_data', 'metric'])
+    df.to_csv('../notebooks/neurips/data/baselines.csv', index=False)
