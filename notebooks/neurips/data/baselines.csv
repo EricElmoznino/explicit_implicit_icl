@@ -1,37 +1,37 @@
 train_data,seed,val_data,metric
-lowrankmlp_classification,0,iid,0.9830271601676941
-lowrankmlp_classification,0,ood (far),0.9765565395355225
-lowrankmlp_classification,0,ood (wide),0.9830271601676941
+lowrankmlp_classification,0,iid,0.983027160167694
+lowrankmlp_classification,0,ood (far),0.9765565395355223
+lowrankmlp_classification,0,ood (wide),0.983027160167694
 lowrankmlp_classification,1,iid,0.9586136937141418
 lowrankmlp_classification,1,ood (far),0.947073221206665
 lowrankmlp_classification,1,ood (wide),0.9586136937141418
-lowrankmlp_classification,2,iid,0.9632410407066345
+lowrankmlp_classification,2,iid,0.9632410407066344
 lowrankmlp_classification,2,ood (far),0.9600045680999756
-lowrankmlp_classification,2,ood (wide),0.9632410407066345
+lowrankmlp_classification,2,ood (wide),0.9632410407066344
 lowrankmlp_classification,3,iid,0.9643657207489014
 lowrankmlp_classification,3,ood (far),0.944945216178894
 lowrankmlp_classification,3,ood (wide),0.9643657207489014
-lowrankmlp_classification,4,iid,0.9602754712104797
-lowrankmlp_classification,4,ood (far),0.9531718492507935
-lowrankmlp_classification,4,ood (wide),0.9602754712104797
+lowrankmlp_classification,4,iid,0.9602754712104796
+lowrankmlp_classification,4,ood (far),0.9531718492507936
+lowrankmlp_classification,4,ood (wide),0.9602754712104796
 lowrankmlp_regression,0,iid,0.9472699165344238
 lowrankmlp_regression,0,ood (far),0.941085159778595
-lowrankmlp_regression,0,ood (wide),0.9497630596160889
-lowrankmlp_regression,1,iid,0.9756999015808105
+lowrankmlp_regression,0,ood (wide),0.9497630596160888
+lowrankmlp_regression,1,iid,0.9756999015808104
 lowrankmlp_regression,1,ood (far),0.941102147102356
 lowrankmlp_regression,1,ood (wide),0.9299584031105042
-lowrankmlp_regression,2,iid,0.9348070025444031
+lowrankmlp_regression,2,iid,0.9348070025444032
 lowrankmlp_regression,2,ood (far),0.9593007564544678
 lowrankmlp_regression,2,ood (wide),0.9314836859703064
 lowrankmlp_regression,3,iid,0.9285520315170288
 lowrankmlp_regression,3,ood (far),0.9523621201515198
 lowrankmlp_regression,3,ood (wide),0.9176146388053894
-lowrankmlp_regression,4,iid,0.9531669020652771
+lowrankmlp_regression,4,iid,0.9531669020652772
 lowrankmlp_regression,4,ood (far),0.9493595957756042
 lowrankmlp_regression,4,ood (wide),0.9558284282684326
 linear_regression,0,iid,0.5119891166687012
 linear_regression,0,ood (far),0.5353370904922485
-linear_regression,0,ood (wide),0.45388713479042053
+linear_regression,0,ood (wide),0.4538871347904205
 linear_regression,1,iid,0.5517066717147827
 linear_regression,1,ood (far),0.5021186470985413
 linear_regression,1,ood (wide),0.4676578640937805
@@ -42,7 +42,7 @@ linear_regression,3,iid,0.4983016848564148
 linear_regression,3,ood (far),0.5184724926948547
 linear_regression,3,ood (wide),0.5152934789657593
 linear_regression,4,iid,0.5053766965866089
-linear_regression,4,ood (far),0.48510879278182983
+linear_regression,4,ood (far),0.4851087927818298
 linear_regression,4,ood (wide),0.512708842754364
 linear_classification,0,iid,0.8638904690742493
 linear_classification,0,ood (far),0.8459205627441406
@@ -69,18 +69,23 @@ raven,3,iid,0.5169140100479126
 raven,3,ood,0.5055267761150996
 raven,4,iid,0.5164015436746988
 raven,4,ood,0.5048120468854904
-sinusoid_regression,0,iid,0.33809590339660645
-sinusoid_regression,0,ood (far),0.33834725618362427
+sinusoid_regression,0,iid,0.3380959033966064
+sinusoid_regression,0,ood (far),0.3383472561836242
 sinusoid_regression,0,ood (wide),0.3391135632991791
 sinusoid_regression,1,iid,0.3485119342803955
 sinusoid_regression,1,ood (far),0.3390589952468872
-sinusoid_regression,1,ood (wide),0.33997613191604614
+sinusoid_regression,1,ood (wide),0.3399761319160461
 sinusoid_regression,2,iid,0.3372476398944855
-sinusoid_regression,2,ood (far),0.33136868476867676
-sinusoid_regression,2,ood (wide),0.32758092880249023
-sinusoid_regression,3,iid,0.34225499629974365
-sinusoid_regression,3,ood (far),0.33502286672592163
-sinusoid_regression,3,ood (wide),0.33828794956207275
-sinusoid_regression,4,iid,0.34508293867111206
+sinusoid_regression,2,ood (far),0.3313686847686767
+sinusoid_regression,2,ood (wide),0.3275809288024902
+sinusoid_regression,3,iid,0.3422549962997436
+sinusoid_regression,3,ood (far),0.3350228667259216
+sinusoid_regression,3,ood (wide),0.3382879495620727
+sinusoid_regression,4,iid,0.345082938671112
 sinusoid_regression,4,ood (far),0.338113933801651
 sinusoid_regression,4,ood (wide),0.3254370093345642
+gene_crispr,0,iid,0.0
+gene_crispr,1,iid,0.0
+gene_crispr,2,iid,0.0
+gene_crispr,3,iid,0.0
+gene_crispr,4,iid,0.01768092105263158
