@@ -10,6 +10,7 @@ task:
       _target_: models.explicit.TransformerContext
       x_dim: ${....data.x_dim}
       y_dim: ${....data.y_dim}
+      z_dim: ${.n_features}
       n_features: 256
       n_heads: 4
       n_hidden: 512
@@ -18,7 +19,7 @@ task:
       _target_: models.explicit.TransformerPrediction
       x_dim: ${....data.x_dim}
       y_dim: ${....data.y_dim}
-      z_dim: ${.n_features}
+      z_dim: ${..context_model.z_dim}
       n_features: 256
       n_heads: 4
       n_hidden: 512
