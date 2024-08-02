@@ -1,0 +1,1 @@
+python train.py --multirun hydra/launcher=mila_eric save_dir=/home/mila/e/eric.elmoznino/scratch/explicit_implicit_icl/logs experiment=reviewer_rebuttals/supervised_ablation seed=0,1,2,3,4 logger.tags=["supervised_ablation"]
