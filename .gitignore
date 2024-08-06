@@ -167,3 +167,4 @@ checkpoints/*
 data/raven_datagen/data/*
 !.gitkeep
 data/hh_data.pkl
+artifacts/

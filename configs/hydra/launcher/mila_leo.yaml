@@ -1,0 +1,13 @@
+defaults:
+  - submitit_slurm
+
+partition: long
+cpus_per_task: 6
+gres: gpu:1
+tasks_per_node: 1
+mem_gb: 32
+timeout_min: 1440  # 1 day
+array_parallelism: 5
+
+setup:
+  - "source venv/bin/activate"
