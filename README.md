@@ -6,7 +6,6 @@ We use `hydra` to configure experiments. Configurations for individual experimen
 
 ```python train.py experiment=linear_regression/implicit wandb_account=[wandb account] save_dir=[cluster_path] seed=101```
 
-## Main requirements
-- PyTorch
-- PyTorch Lightning
-- Hydra
+## Setup
+- `python3.10 -v venv venv`
+- `pip install -r requirements.txt`
