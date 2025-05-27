@@ -206,54 +206,6 @@ class MLPPrediction(nn.Module):
 ####################################################
 
 
-class RavenTransformerContext(nn.Module):
-    def __init__(
-        self,
-        dim,
-        n_heads,
-        n_hidden,
-        n_layers,
-        z_dim=None,
-        dropout=0.0,
-    ):
-        super().__init__()
-        self.dim = dim
-        self.z_dim = dim if z_dim is None else z_dim
-        self.context_embedding = nn.Parameter(torch.randn(dim))
-        self.context_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=dim,
-                nhead=n_heads,
-                dim_feedforward=n_hidden,
-                dropout=dropout,
-                batch_first=True,
-            ),
-            num_layers=n_layers,
-        )
-        if self.z_dim != dim:
-            self.z_encoder = nn.Linear(dim, z_dim)
-        self.init_weights()
-
-    def init_weights(self):
-        # Xavier uniform init for the transformer
-        for p in self.context_encoder.parameters():
-            if p.dim() > 1:
-                nn.init.xavier_uniform_(p)
-
-    def forward(self, x_c, y_c):
-        assert y_c is None
-        c_token = (
-            self.context_embedding.unsqueeze(0)
-            .unsqueeze(0)
-            .expand(x_c.shape[0], -1, -1)
-        )
-        z = torch.cat([c_token, x_c], dim=1)
-        z = self.context_encoder(z)[:, 0]
-        if self.z_dim != self.dim:
-            z = self.z_encoder(z)
-        return z
-
-
 class RavenTransformerPrediction(nn.Module):
     def __init__(
         self,
